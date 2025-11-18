@@ -8,13 +8,12 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces",
-    "dev": "concurrently \"npm run dev -w apps/backend\" \"npm run dev -w apps/chatbot-frontend\" \"npm run dev -w apps/rebuild-platform\"",
+    "dev": "concurrently \"npm run dev -w apps/backend\" \"npm run dev -w apps/chatbot-frontend\"",
     "start": "npm run start --workspaces",
     "lint": "npm run lint --workspaces",
     "clean": "npm run clean --workspaces",
     "backend:dev": "npm run dev -w apps/backend",
     "frontend:dev": "npm run dev -w apps/chatbot-frontend",
-    "rebuild:dev": "npm run dev -w apps/rebuild-platform",
     "migrate:data": "ts-node src/database/migrate-data.ts"
   },
   "devDependencies": {
