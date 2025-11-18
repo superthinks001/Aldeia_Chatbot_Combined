@@ -2,8 +2,8 @@
 /**
  * Database Configuration
  *
- * Handles configuration for both SQLite and PostgreSQL databases
- * Uses environment variables to determine which database to use
+ * Handles configuration for PostgreSQL database
+ * Uses environment variables to configure connection
  */
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
@@ -13,7 +13,6 @@ exports.getDatabaseConfig = getDatabaseConfig;
 exports.validateConfig = validateConfig;
 exports.getDatabaseType = getDatabaseType;
 exports.isPostgres = isPostgres;
-exports.isSQLite = isSQLite;
 const dotenv_1 = __importDefault(require("dotenv"));
 const path_1 = __importDefault(require("path"));
 // Load environment variables
@@ -23,16 +22,6 @@ dotenv_1.default.config({ path: path_1.default.join(__dirname, '../../../../.env
  * Get database configuration based on environment variables
  */
 function getDatabaseConfig() {
-    // Check if we should use SQLite (default for backward compatibility)
-    const useSQLite = process.env.USE_SQLITE !== 'false';
-    if (useSQLite) {
-        return {
-            type: 'sqlite',
-            sqlite: {
-                path: process.env.SQLITE_DB_PATH || path_1.default.join(__dirname, '../../../aldeia.db')
-            }
-        };
-    }
     // Parse PostgreSQL connection string if provided
     const databaseUrl = process.env.DATABASE_URL || process.env.SUPABASE_DB_URL;
     if (databaseUrl) {
@@ -85,32 +74,19 @@ function parsePostgresUrl(url) {
  * Validate database configuration
  */
 function validateConfig(config) {
-    var _a;
-    if (config.type === 'sqlite') {
-        return !!((_a = config.sqlite) === null || _a === void 0 ? void 0 : _a.path);
-    }
-    if (config.type === 'postgres') {
-        const pg = config.postgres;
-        return !!((pg === null || pg === void 0 ? void 0 : pg.host) && (pg === null || pg === void 0 ? void 0 : pg.port) && (pg === null || pg === void 0 ? void 0 : pg.database) && (pg === null || pg === void 0 ? void 0 : pg.user));
-    }
-    return false;
+    const pg = config.postgres;
+    return !!((pg === null || pg === void 0 ? void 0 : pg.host) && (pg === null || pg === void 0 ? void 0 : pg.port) && (pg === null || pg === void 0 ? void 0 : pg.database) && (pg === null || pg === void 0 ? void 0 : pg.user));
 }
 /**
  * Get current database type
  */
 function getDatabaseType() {
-    return getDatabaseConfig().type;
+    return 'postgres';
 }
 /**
  * Check if using PostgreSQL
  */
 function isPostgres() {
-    return getDatabaseType() === 'postgres';
-}
-/**
- * Check if using SQLite
- */
-function isSQLite() {
-    return getDatabaseType() === 'sqlite';
+    return true;
 }
 exports.default = getDatabaseConfig();

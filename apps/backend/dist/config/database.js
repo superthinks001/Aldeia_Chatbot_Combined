@@ -45,46 +45,33 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sqlite = exports.supabase = void 0;
+exports.supabase = void 0;
 exports.testConnection = testConnection;
 const supabase_js_1 = require("@supabase/supabase-js");
-const sqlite3_1 = __importDefault(require("sqlite3"));
 const dotenv = __importStar(require("dotenv"));
 const path_1 = __importDefault(require("path"));
 // Load environment variables
 dotenv.config({ path: path_1.default.join(__dirname, '../../../../.env.merge') });
 // ============================================
-// PostgreSQL/Supabase Connection (Primary)
+// PostgreSQL/Supabase Connection
 // ============================================
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!supabaseUrl || !supabaseServiceKey) {
-    console.warn('⚠️  Supabase credentials not found. Using SQLite fallback.');
+    throw new Error('❌ Supabase credentials not found. Please set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in your environment.');
 }
-exports.supabase = (0, supabase_js_1.createClient)(supabaseUrl || 'https://placeholder.supabase.co', supabaseServiceKey || 'placeholder-key', {
+exports.supabase = (0, supabase_js_1.createClient)(supabaseUrl, supabaseServiceKey, {
     auth: {
         autoRefreshToken: false,
         persistSession: false
     }
 });
 // ============================================
-// SQLite Connection (Fallback/Legacy)
-// ============================================
-const useSQLite = process.env.USE_SQLITE === 'true';
-const sqliteDbPath = path_1.default.join(__dirname, '../../../data/aldeia.db');
-exports.sqlite = useSQLite
-    ? new sqlite3_1.default.Database(sqliteDbPath)
-    : null;
-// ============================================
 // Database Helper Functions
 // ============================================
 function testConnection() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            if (useSQLite) {
-                console.log('🗄️  Using SQLite database');
-                return true;
-            }
             const { data, error } = yield exports.supabase
                 .from('users')
                 .select('count')
@@ -103,10 +90,5 @@ function testConnection() {
     });
 }
 // Log database mode on import
-if (useSQLite) {
-    console.log('📊 Database Mode: SQLite (Legacy)');
-}
-else {
-    console.log('📊 Database Mode: PostgreSQL/Supabase');
-}
-exports.default = { supabase: exports.supabase, sqlite: exports.sqlite, testConnection };
+console.log('📊 Database Mode: PostgreSQL/Supabase');
+exports.default = { supabase: exports.supabase, testConnection };

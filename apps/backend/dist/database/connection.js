@@ -2,8 +2,7 @@
 /**
  * Database Connection Manager
  *
- * Handles connection pooling for PostgreSQL and SQLite database connections
- * Provides a unified interface for both database types
+ * Handles connection pooling for PostgreSQL database connections
  */
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
@@ -14,14 +13,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.isPostgres = void 0;
 exports.initConnection = initConnection;
 exports.getPool = getPool;
-exports.getSQLiteDb = getSQLiteDb;
 exports.query = query;
 exports.queryOne = queryOne;
 exports.execute = execute;
@@ -32,75 +27,56 @@ exports.withTransaction = withTransaction;
 exports.closeConnection = closeConnection;
 exports.healthCheck = healthCheck;
 const pg_1 = require("pg");
-const sqlite3_1 = __importDefault(require("sqlite3"));
-const util_1 = require("util");
 const config_1 = require("./config");
 // Re-export for convenience
 var config_2 = require("./config");
 Object.defineProperty(exports, "isPostgres", { enumerable: true, get: function () { return config_2.isPostgres; } });
 let pgPool = null;
-let sqliteDb = null;
 /**
  * Initialize database connection
  */
 function initConnection() {
     return __awaiter(this, void 0, void 0, function* () {
         const config = (0, config_1.getDatabaseConfig)();
-        if (config.type === 'postgres' && config.postgres) {
-            if (!pgPool) {
-                // Use connection string if DATABASE_URL is available (better handling of special chars)
-                const connectionString = process.env.DATABASE_URL || process.env.SUPABASE_DB_URL;
-                if (connectionString) {
-                    pgPool = new pg_1.Pool({
-                        connectionString,
-                        ssl: { rejectUnauthorized: false },
-                        max: config.postgres.max,
-                        idleTimeoutMillis: config.postgres.idleTimeoutMillis,
-                        connectionTimeoutMillis: config.postgres.connectionTimeoutMillis
-                    });
-                }
-                else {
-                    pgPool = new pg_1.Pool({
-                        host: config.postgres.host,
-                        port: config.postgres.port,
-                        database: config.postgres.database,
-                        user: config.postgres.user,
-                        password: config.postgres.password,
-                        ssl: config.postgres.ssl ? { rejectUnauthorized: false } : false,
-                        max: config.postgres.max,
-                        idleTimeoutMillis: config.postgres.idleTimeoutMillis,
-                        connectionTimeoutMillis: config.postgres.connectionTimeoutMillis
-                    });
-                }
-                // Test connection
-                try {
-                    const client = yield pgPool.connect();
-                    console.log('✅ Connected to PostgreSQL database');
-                    client.release();
-                }
-                catch (error) {
-                    console.error('❌ Failed to connect to PostgreSQL:', error);
-                    throw error;
-                }
-                // Error handling
-                pgPool.on('error', (err) => {
-                    console.error('Unexpected PostgreSQL pool error:', err);
+        if (!pgPool) {
+            // Use connection string if DATABASE_URL is available (better handling of special chars)
+            const connectionString = process.env.DATABASE_URL || process.env.SUPABASE_DB_URL;
+            if (connectionString) {
+                pgPool = new pg_1.Pool({
+                    connectionString,
+                    ssl: { rejectUnauthorized: false },
+                    max: config.postgres.max,
+                    idleTimeoutMillis: config.postgres.idleTimeoutMillis,
+                    connectionTimeoutMillis: config.postgres.connectionTimeoutMillis
                 });
             }
-        }
-        else if (config.type === 'sqlite' && config.sqlite) {
-            if (!sqliteDb) {
-                sqliteDb = new sqlite3_1.default.Database(config.sqlite.path, (err) => {
-                    if (err) {
-                        console.error('❌ Failed to connect to SQLite:', err);
-                        throw err;
-                    }
-                    console.log('✅ Connected to SQLite database:', config.sqlite.path);
+            else {
+                pgPool = new pg_1.Pool({
+                    host: config.postgres.host,
+                    port: config.postgres.port,
+                    database: config.postgres.database,
+                    user: config.postgres.user,
+                    password: config.postgres.password,
+                    ssl: config.postgres.ssl ? { rejectUnauthorized: false } : false,
+                    max: config.postgres.max,
+                    idleTimeoutMillis: config.postgres.idleTimeoutMillis,
+                    connectionTimeoutMillis: config.postgres.connectionTimeoutMillis
                 });
             }
-        }
-        else {
-            throw new Error('Invalid database configuration');
+            // Test connection
+            try {
+                const client = yield pgPool.connect();
+                console.log('✅ Connected to PostgreSQL database');
+                client.release();
+            }
+            catch (error) {
+                console.error('❌ Failed to connect to PostgreSQL:', error);
+                throw error;
+            }
+            // Error handling
+            pgPool.on('error', (err) => {
+                console.error('Unexpected PostgreSQL pool error:', err);
+            });
         }
     });
 }
@@ -114,29 +90,12 @@ function getPool() {
     return pgPool;
 }
 /**
- * Get SQLite database instance
- */
-function getSQLiteDb() {
-    if (!sqliteDb) {
-        throw new Error('SQLite database not initialized. Call initConnection() first.');
-    }
-    return sqliteDb;
-}
-/**
- * Execute a query (unified interface for both databases)
+ * Execute a query
  */
 function query(text_1) {
     return __awaiter(this, arguments, void 0, function* (text, params = []) {
-        if ((0, config_1.isPostgres)()) {
-            const result = yield pgPool.query(text, params);
-            return result.rows;
-        }
-        else {
-            // SQLite
-            const db = getSQLiteDb();
-            const allAsync = (0, util_1.promisify)(db.all.bind(db));
-            return yield allAsync(text, params);
-        }
+        const result = yield pgPool.query(text, params);
+        return result.rows;
     });
 }
 /**
@@ -144,16 +103,8 @@ function query(text_1) {
  */
 function queryOne(text_1) {
     return __awaiter(this, arguments, void 0, function* (text, params = []) {
-        if ((0, config_1.isPostgres)()) {
-            const result = yield pgPool.query(text, params);
-            return result.rows[0] || null;
-        }
-        else {
-            // SQLite
-            const db = getSQLiteDb();
-            const getAsync = (0, util_1.promisify)(db.get.bind(db));
-            return (yield getAsync(text, params)) || null;
-        }
+        const result = yield pgPool.query(text, params);
+        return result.rows[0] || null;
     });
 }
 /**
@@ -161,22 +112,10 @@ function queryOne(text_1) {
  */
 function execute(text_1) {
     return __awaiter(this, arguments, void 0, function* (text, params = []) {
-        if ((0, config_1.isPostgres)()) {
-            const result = yield pgPool.query(text, params);
-            return {
-                rowCount: result.rowCount || 0
-            };
-        }
-        else {
-            // SQLite
-            const db = getSQLiteDb();
-            const runAsync = (0, util_1.promisify)(db.run.bind(db));
-            const result = yield runAsync(text, params);
-            return {
-                rowCount: result.changes || 0,
-                lastId: result.lastID
-            };
-        }
+        const result = yield pgPool.query(text, params);
+        return {
+            rowCount: result.rowCount || 0
+        };
     });
 }
 /**
@@ -184,17 +123,9 @@ function execute(text_1) {
  */
 function beginTransaction() {
     return __awaiter(this, void 0, void 0, function* () {
-        if ((0, config_1.isPostgres)()) {
-            const client = yield pgPool.connect();
-            yield client.query('BEGIN');
-            return client;
-        }
-        else {
-            const db = getSQLiteDb();
-            const runAsync = (0, util_1.promisify)(db.run.bind(db));
-            yield runAsync('BEGIN TRANSACTION');
-            return db;
-        }
+        const client = yield pgPool.connect();
+        yield client.query('BEGIN');
+        return client;
     });
 }
 /**
@@ -202,15 +133,8 @@ function beginTransaction() {
  */
 function commitTransaction(client) {
     return __awaiter(this, void 0, void 0, function* () {
-        if ((0, config_1.isPostgres)()) {
-            yield client.query('COMMIT');
-            client.release();
-        }
-        else {
-            const db = client;
-            const runAsync = (0, util_1.promisify)(db.run.bind(db));
-            yield runAsync('COMMIT');
-        }
+        yield client.query('COMMIT');
+        client.release();
     });
 }
 /**
@@ -218,15 +142,8 @@ function commitTransaction(client) {
  */
 function rollbackTransaction(client) {
     return __awaiter(this, void 0, void 0, function* () {
-        if ((0, config_1.isPostgres)()) {
-            yield client.query('ROLLBACK');
-            client.release();
-        }
-        else {
-            const db = client;
-            const runAsync = (0, util_1.promisify)(db.run.bind(db));
-            yield runAsync('ROLLBACK');
-        }
+        yield client.query('ROLLBACK');
+        client.release();
     });
 }
 /**
@@ -256,18 +173,6 @@ function closeConnection() {
             console.log('PostgreSQL pool closed');
             pgPool = null;
         }
-        if (sqliteDb) {
-            yield new Promise((resolve, reject) => {
-                sqliteDb.close((err) => {
-                    if (err)
-                        reject(err);
-                    else
-                        resolve();
-                });
-            });
-            console.log('SQLite database closed');
-            sqliteDb = null;
-        }
     });
 }
 /**
@@ -276,12 +181,7 @@ function closeConnection() {
 function healthCheck() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            if ((0, config_1.isPostgres)()) {
-                yield query('SELECT NOW()');
-            }
-            else {
-                yield query('SELECT 1');
-            }
+            yield query('SELECT NOW()');
             return true;
         }
         catch (error) {

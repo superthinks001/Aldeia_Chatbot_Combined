@@ -16,7 +16,7 @@ exports.authenticateToken = void 0;
 const express_1 = __importDefault(require("express"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const bcrypt_1 = __importDefault(require("bcrypt"));
-const db_1 = require("../db");
+const client_1 = require("../database/client");
 const logger_1 = require("../utils/logger");
 const sanitizeInput_1 = require("../middleware/sanitizeInput");
 const utils_1 = require("@aldeia/utils");
@@ -331,81 +331,37 @@ router.post('/logout', exports.authenticateToken, (req, res) => {
 });
 function createUser(userData) {
     return __awaiter(this, void 0, void 0, function* () {
-        return new Promise((resolve, reject) => {
-            db_1.db.run(`INSERT INTO users (id, name, email, password, role, created_at, updated_at) 
-       VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`, [userData.id, userData.name, userData.email, userData.password, userData.role], function (err) {
-                if (err) {
-                    reject(err);
-                }
-                else {
-                    resolve({
-                        id: userData.id,
-                        name: userData.name,
-                        email: userData.email,
-                        role: userData.role,
-                        createdAt: new Date()
-                    });
-                }
-            });
-        });
+        yield (0, client_1.execute)(`INSERT INTO users (id, name, email, password_hash, role, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`, [userData.id, userData.name, userData.email, userData.password, userData.role]);
+        return {
+            id: userData.id,
+            name: userData.name,
+            email: userData.email,
+            role: userData.role,
+            createdAt: new Date()
+        };
     });
 }
 function getUserByEmail(email) {
     return __awaiter(this, void 0, void 0, function* () {
-        return new Promise((resolve, reject) => {
-            db_1.db.get('SELECT * FROM users WHERE email = ?', [email], (err, row) => {
-                if (err) {
-                    reject(err);
-                }
-                else {
-                    resolve(row);
-                }
-            });
-        });
+        return yield (0, client_1.queryOne)('SELECT * FROM users WHERE email = $1', [email]);
     });
 }
 function getUserById(id) {
     return __awaiter(this, void 0, void 0, function* () {
-        return new Promise((resolve, reject) => {
-            db_1.db.get('SELECT * FROM users WHERE id = ?', [id], (err, row) => {
-                if (err) {
-                    reject(err);
-                }
-                else {
-                    resolve(row);
-                }
-            });
-        });
+        return yield (0, client_1.queryOne)('SELECT * FROM users WHERE id = $1', [id]);
     });
 }
 function updateUser(id, updates) {
     return __awaiter(this, void 0, void 0, function* () {
-        return new Promise((resolve, reject) => {
-            const fields = Object.keys(updates).map(key => `${key} = ?`).join(', ');
-            const values = [...Object.values(updates), id];
-            db_1.db.run(`UPDATE users SET ${fields}, updated_at = datetime('now') WHERE id = ?`, values, function (err) {
-                if (err) {
-                    reject(err);
-                }
-                else {
-                    resolve();
-                }
-            });
-        });
+        const fields = Object.keys(updates).map((key, index) => `${key} = $${index + 1}`).join(', ');
+        const values = [...Object.values(updates), id];
+        yield (0, client_1.execute)(`UPDATE users SET ${fields}, updated_at = CURRENT_TIMESTAMP WHERE id = $${values.length}`, values);
     });
 }
 function updateLastLogin(id) {
     return __awaiter(this, void 0, void 0, function* () {
-        return new Promise((resolve, reject) => {
-            db_1.db.run('UPDATE users SET last_login = datetime(\'now\') WHERE id = ?', [id], function (err) {
-                if (err) {
-                    reject(err);
-                }
-                else {
-                    resolve();
-                }
-            });
-        });
+        yield (0, client_1.execute)('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1', [id]);
     });
 }
 exports.default = router;

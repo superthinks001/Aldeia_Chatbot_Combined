@@ -1,8 +1,8 @@
 /**
  * Database Configuration
  *
- * Handles configuration for both SQLite and PostgreSQL databases
- * Uses environment variables to determine which database to use
+ * Handles configuration for PostgreSQL database
+ * Uses environment variables to configure connection
  */
 
 import dotenv from 'dotenv';
@@ -13,11 +13,8 @@ dotenv.config({ path: path.join(__dirname, '../../../.env') });
 dotenv.config({ path: path.join(__dirname, '../../../../.env.merge') });
 
 export interface DatabaseConfig {
-  type: 'sqlite' | 'postgres';
-  sqlite?: {
-    path: string;
-  };
-  postgres?: {
+  type: 'postgres';
+  postgres: {
     host: string;
     port: number;
     database: string;
@@ -34,18 +31,6 @@ export interface DatabaseConfig {
  * Get database configuration based on environment variables
  */
 export function getDatabaseConfig(): DatabaseConfig {
-  // Check if we should use SQLite (default for backward compatibility)
-  const useSQLite = process.env.USE_SQLITE !== 'false';
-
-  if (useSQLite) {
-    return {
-      type: 'sqlite',
-      sqlite: {
-        path: process.env.SQLITE_DB_PATH || path.join(__dirname, '../../../aldeia.db')
-      }
-    };
-  }
-
   // Parse PostgreSQL connection string if provided
   const databaseUrl = process.env.DATABASE_URL || process.env.SUPABASE_DB_URL;
 
@@ -102,37 +87,22 @@ function parsePostgresUrl(url: string): DatabaseConfig {
  * Validate database configuration
  */
 export function validateConfig(config: DatabaseConfig): boolean {
-  if (config.type === 'sqlite') {
-    return !!config.sqlite?.path;
-  }
-
-  if (config.type === 'postgres') {
-    const pg = config.postgres;
-    return !!(pg?.host && pg?.port && pg?.database && pg?.user);
-  }
-
-  return false;
+  const pg = config.postgres;
+  return !!(pg?.host && pg?.port && pg?.database && pg?.user);
 }
 
 /**
  * Get current database type
  */
-export function getDatabaseType(): 'sqlite' | 'postgres' {
-  return getDatabaseConfig().type;
+export function getDatabaseType(): 'postgres' {
+  return 'postgres';
 }
 
 /**
  * Check if using PostgreSQL
  */
 export function isPostgres(): boolean {
-  return getDatabaseType() === 'postgres';
-}
-
-/**
- * Check if using SQLite
- */
-export function isSQLite(): boolean {
-  return getDatabaseType() === 'sqlite';
+  return true;
 }
 
 export default getDatabaseConfig();

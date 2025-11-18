@@ -1,5 +1,4 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import sqlite3 from 'sqlite3';
 import * as dotenv from 'dotenv';
 import path from 'path';
 
@@ -7,19 +6,19 @@ import path from 'path';
 dotenv.config({ path: path.join(__dirname, '../../../../.env.merge') });
 
 // ============================================
-// PostgreSQL/Supabase Connection (Primary)
+// PostgreSQL/Supabase Connection
 // ============================================
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseServiceKey) {
-  console.warn('⚠️  Supabase credentials not found. Using SQLite fallback.');
+  throw new Error('❌ Supabase credentials not found. Please set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in your environment.');
 }
 
 export const supabase: SupabaseClient = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseServiceKey || 'placeholder-key',
+  supabaseUrl,
+  supabaseServiceKey,
   {
     auth: {
       autoRefreshToken: false,
@@ -29,27 +28,11 @@ export const supabase: SupabaseClient = createClient(
 );
 
 // ============================================
-// SQLite Connection (Fallback/Legacy)
-// ============================================
-
-const useSQLite = process.env.USE_SQLITE === 'true';
-const sqliteDbPath = path.join(__dirname, '../../../../data/aldeia.db');
-
-export const sqlite = useSQLite
-  ? new sqlite3.Database(sqliteDbPath)
-  : null;
-
-// ============================================
 // Database Helper Functions
 // ============================================
 
 export async function testConnection(): Promise<boolean> {
   try {
-    if (useSQLite) {
-      console.log('🗄️  Using SQLite database');
-      return true;
-    }
-
     const { data, error } = await supabase
       .from('users')
       .select('count')
@@ -70,10 +53,6 @@ export async function testConnection(): Promise<boolean> {
 }
 
 // Log database mode on import
-if (useSQLite) {
-  console.log('📊 Database Mode: SQLite (Legacy)');
-} else {
-  console.log('📊 Database Mode: PostgreSQL/Supabase');
-}
+console.log('📊 Database Mode: PostgreSQL/Supabase');
 
-export default { supabase, sqlite, testConnection };
+export default { supabase, testConnection };

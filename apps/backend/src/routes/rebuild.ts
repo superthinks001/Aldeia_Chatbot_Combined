@@ -1,5 +1,5 @@
 import express, { Request, Response } from 'express';
-import { db } from '../db';
+import { query, queryOne, execute } from '../database/client';
 import { logger } from '../utils/logger';
 import { authenticateToken } from './auth';
 import { sanitizeInput } from '../middleware/sanitizeInput';
@@ -331,148 +331,101 @@ router.get('/preferences', authenticateToken, async (req: Request, res: Response
 // HELPER FUNCTIONS - Database Operations
 // ====================================================================
 
-async function getProjects(query: string, params: any[]): Promise<any[]> {
-  return new Promise((resolve, reject) => {
-    db.all(query, params, (err, rows) => {
-      if (err) {
-        reject(err);
-      } else {
-        const projects = (rows as any[]).map((row: any) => ({
-          ...row,
-          location: JSON.parse(row.location || '{}'),
-          preferences: JSON.parse(row.preferences || '{}')
-        }));
-        resolve(projects);
-      }
-    });
-  });
+async function getProjects(sql: string, params: any[]): Promise<any[]> {
+  const rows = await query(sql, params);
+  return rows.map((row: any) => ({
+    ...row,
+    location: typeof row.location === 'string' ? JSON.parse(row.location) : row.location,
+    preferences: typeof row.preferences === 'string' ? JSON.parse(row.preferences) : row.preferences
+  }));
 }
 
 async function getProjectById(id: string): Promise<any> {
-  return new Promise((resolve, reject) => {
-    db.get(
-      'SELECT * FROM rebuild_projects WHERE id = ?',
-      [id],
-      (err, row) => {
-        if (err) {
-          reject(err);
-        } else {
-          if (row) {
-            const typedRow = row as any;
-            resolve({
-              ...typedRow,
-              location: JSON.parse(typedRow.location || '{}'),
-              preferences: JSON.parse(typedRow.preferences || '{}')
-            });
-          } else {
-            resolve(null);
-          }
-        }
-      }
-    );
-  });
+  const row = await queryOne(
+    'SELECT * FROM rebuild_projects WHERE id = $1',
+    [id]
+  );
+
+  if (row) {
+    return {
+      ...row,
+      location: typeof row.location === 'string' ? JSON.parse(row.location) : row.location,
+      preferences: typeof row.preferences === 'string' ? JSON.parse(row.preferences) : row.preferences
+    };
+  }
+  return null;
 }
 
 async function createProject(projectData: any): Promise<RebuildProject> {
-  return new Promise((resolve, reject) => {
-    db.run(
-      `INSERT INTO rebuild_projects (id, user_id, name, location, preferences, status, created_at, updated_at) 
-       VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-      [
-        projectData.id,
-        projectData.userId,
-        projectData.name,
-        JSON.stringify(projectData.location),
-        JSON.stringify(projectData.preferences),
-        projectData.status
-      ],
-      function(err) {
-        if (err) {
-          reject(err);
-        } else {
-          resolve({
-            id: projectData.id,
-            userId: projectData.userId,
-            name: projectData.name,
-            location: projectData.location,
-            preferences: projectData.preferences,
-            status: projectData.status,
-            createdAt: new Date(),
-            updatedAt: new Date()
-          } as RebuildProject);
-        }
-      }
-    );
-  });
+  await execute(
+    `INSERT INTO rebuild_projects (id, user_id, name, location, preferences, status, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+    [
+      projectData.id,
+      projectData.userId,
+      projectData.name,
+      JSON.stringify(projectData.location),
+      JSON.stringify(projectData.preferences),
+      projectData.status
+    ]
+  );
+
+  return {
+    id: projectData.id,
+    userId: projectData.userId,
+    name: projectData.name,
+    location: projectData.location,
+    preferences: projectData.preferences,
+    status: projectData.status,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  } as RebuildProject;
 }
 
 async function updateProject(id: string, updates: any): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const fields = [];
-    const values = [];
+  const fields: string[] = [];
+  const values: any[] = [];
+  let paramIndex = 1;
 
-    Object.keys(updates).forEach(key => {
-      if (key === 'location' || key === 'preferences') {
-        fields.push(`${key} = ?`);
-        values.push(JSON.stringify(updates[key]));
-      } else {
-        fields.push(`${key} = ?`);
-        values.push(updates[key]);
-      }
-    });
-
-    fields.push('updated_at = datetime(\'now\')');
-    values.push(id);
-
-    db.run(
-      `UPDATE rebuild_projects SET ${fields.join(', ')} WHERE id = ?`,
-      values,
-      function(err) {
-        if (err) {
-          reject(err);
-        } else {
-          resolve();
-        }
-      }
-    );
+  Object.keys(updates).forEach(key => {
+    if (key === 'location' || key === 'preferences') {
+      fields.push(`${key} = $${paramIndex++}`);
+      values.push(JSON.stringify(updates[key]));
+    } else {
+      fields.push(`${key} = $${paramIndex++}`);
+      values.push(updates[key]);
+    }
   });
+
+  fields.push('updated_at = CURRENT_TIMESTAMP');
+  values.push(id);
+
+  await execute(
+    `UPDATE rebuild_projects SET ${fields.join(', ')} WHERE id = $${paramIndex}`,
+    values
+  );
 }
 
 async function saveUserPreferences(userId: string, preferences: any): Promise<void> {
-  return new Promise((resolve, reject) => {
-    db.run(
-      `INSERT OR REPLACE INTO user_preferences (user_id, preferences, updated_at) 
-       VALUES (?, ?, datetime('now'))`,
-      [userId, JSON.stringify(preferences)],
-      function(err) {
-        if (err) {
-          reject(err);
-        } else {
-          resolve();
-        }
-      }
-    );
-  });
+  // PostgreSQL uses INSERT...ON CONFLICT instead of INSERT OR REPLACE
+  await execute(
+    `INSERT INTO user_preferences (user_id, preferences, updated_at)
+     VALUES ($1, $2, CURRENT_TIMESTAMP)
+     ON CONFLICT (user_id) DO UPDATE SET preferences = $2, updated_at = CURRENT_TIMESTAMP`,
+    [userId, JSON.stringify(preferences)]
+  );
 }
 
 async function getUserPreferences(userId: string): Promise<any> {
-  return new Promise((resolve, reject) => {
-    db.get(
-      'SELECT preferences FROM user_preferences WHERE user_id = ?',
-      [userId],
-      (err, row: any) => {
-        if (err) {
-          reject(err);
-        } else {
-          if (row) {
-            resolve(JSON.parse(row.preferences || '{}'));
-          } else {
-            resolve(null);
-          }
-        }
-      }
-    );
-  });
+  const row = await queryOne(
+    'SELECT preferences FROM user_preferences WHERE user_id = $1',
+    [userId]
+  );
+
+  if (row) {
+    return typeof row.preferences === 'string' ? JSON.parse(row.preferences) : row.preferences;
+  }
+  return null;
 }
 
 export default router;

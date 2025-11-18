@@ -15,7 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const multer_1 = __importDefault(require("multer"));
 const path_1 = __importDefault(require("path"));
-const db_1 = require("../db");
+const client_1 = require("../database/client");
 const logger_1 = require("../utils/logger");
 const auth_1 = require("./auth");
 const utils_1 = require("@aldeia/utils");
@@ -198,74 +198,39 @@ router.delete('/:id', auth_1.authenticateToken, (req, res) => __awaiter(void 0, 
 // ====================================================================
 // HELPER FUNCTIONS - Database Operations
 // ====================================================================
-function getDocuments(query, params) {
+function getDocuments(sql, params) {
     return __awaiter(this, void 0, void 0, function* () {
-        return new Promise((resolve, reject) => {
-            db_1.db.all(query, params, (err, rows) => {
-                if (err) {
-                    reject(err);
-                }
-                else {
-                    resolve(rows || []);
-                }
-            });
-        });
+        return yield (0, client_1.query)(sql, params);
     });
 }
 function getDocumentById(id) {
     return __awaiter(this, void 0, void 0, function* () {
-        return new Promise((resolve, reject) => {
-            db_1.db.get('SELECT * FROM documents WHERE id = ?', [id], (err, row) => {
-                if (err) {
-                    reject(err);
-                }
-                else {
-                    resolve(row);
-                }
-            });
-        });
+        return yield (0, client_1.queryOne)('SELECT * FROM documents WHERE id = $1', [id]);
     });
 }
 function createDocument(documentData) {
     return __awaiter(this, void 0, void 0, function* () {
-        return new Promise((resolve, reject) => {
-            db_1.db.run(`INSERT INTO documents (id, filename, content, file_path, uploaded_by, metadata, created_at) 
-       VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`, [
-                documentData.id,
-                documentData.filename,
-                documentData.content,
-                documentData.filePath,
-                documentData.uploadedBy,
-                JSON.stringify(documentData.metadata)
-            ], function (err) {
-                if (err) {
-                    reject(err);
-                }
-                else {
-                    resolve({
-                        id: documentData.id,
-                        filename: documentData.filename,
-                        content: documentData.content,
-                        createdAt: new Date(),
-                        metadata: documentData.metadata
-                    });
-                }
-            });
-        });
+        yield (0, client_1.execute)(`INSERT INTO documents (id, filename, content, file_path, uploaded_by, metadata, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)`, [
+            documentData.id,
+            documentData.filename,
+            documentData.content,
+            documentData.filePath,
+            documentData.uploadedBy,
+            JSON.stringify(documentData.metadata)
+        ]);
+        return {
+            id: documentData.id,
+            filename: documentData.filename,
+            content: documentData.content,
+            createdAt: new Date(),
+            metadata: documentData.metadata
+        };
     });
 }
 function deleteDocument(id) {
     return __awaiter(this, void 0, void 0, function* () {
-        return new Promise((resolve, reject) => {
-            db_1.db.run('DELETE FROM documents WHERE id = ?', [id], function (err) {
-                if (err) {
-                    reject(err);
-                }
-                else {
-                    resolve();
-                }
-            });
-        });
+        yield (0, client_1.execute)('DELETE FROM documents WHERE id = $1', [id]);
     });
 }
 exports.default = router;

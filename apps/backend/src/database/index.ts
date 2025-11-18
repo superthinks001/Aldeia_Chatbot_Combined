@@ -1,14 +1,12 @@
 /**
  * Database Module - Main Entry Point
  *
- * This module provides a unified database interface supporting both SQLite and PostgreSQL.
- * It automatically switches between databases based on environment configuration.
+ * This module provides a database interface for PostgreSQL.
  *
  * Usage:
  *   import { initDb, addOrUpdateUser, logAnalytics } from './database';
  *
  * Configuration:
- *   Set USE_SQLITE=false to use PostgreSQL
  *   Set DATABASE_URL or SUPABASE_DB_URL for PostgreSQL connection
  */
 
@@ -32,7 +30,6 @@ export {
   execute,
   withTransaction,
   isPostgres,
-  isSQLite,
   getDatabaseType
 } from './client';
 

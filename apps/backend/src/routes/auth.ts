@@ -1,7 +1,7 @@
 import express, { Request, Response } from 'express';
 import jwt, { SignOptions } from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
-import { db } from '../db';
+import { query, queryOne, execute } from '../database/client';
 import { logger } from '../utils/logger';
 import { sanitizeInput } from '../middleware/sanitizeInput';
 import { User, ApiResponse } from '@aldeia/shared-types';
@@ -420,93 +420,50 @@ interface CreateUserData {
 }
 
 async function createUser(userData: CreateUserData): Promise<User> {
-  return new Promise((resolve, reject) => {
-    db.run(
-      `INSERT INTO users (id, name, email, password, role, created_at, updated_at) 
-       VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-      [userData.id, userData.name, userData.email, userData.password, userData.role],
-      function(err) {
-        if (err) {
-          reject(err);
-        } else {
-          resolve({
-            id: userData.id,
-            name: userData.name,
-            email: userData.email,
-            role: userData.role,
-            createdAt: new Date()
-          } as User);
-        }
-      }
-    );
-  });
+  await execute(
+    `INSERT INTO users (id, name, email, password_hash, role, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+    [userData.id, userData.name, userData.email, userData.password, userData.role]
+  );
+
+  return {
+    id: userData.id,
+    name: userData.name,
+    email: userData.email,
+    role: userData.role,
+    createdAt: new Date()
+  } as User;
 }
 
 async function getUserByEmail(email: string): Promise<any> {
-  return new Promise((resolve, reject) => {
-    db.get(
-      'SELECT * FROM users WHERE email = ?',
-      [email],
-      (err, row) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(row);
-        }
-      }
-    );
-  });
+  return await queryOne(
+    'SELECT * FROM users WHERE email = $1',
+    [email]
+  );
 }
 
 async function getUserById(id: string): Promise<any> {
-  return new Promise((resolve, reject) => {
-    db.get(
-      'SELECT * FROM users WHERE id = ?',
-      [id],
-      (err, row) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(row);
-        }
-      }
-    );
-  });
+  return await queryOne(
+    'SELECT * FROM users WHERE id = $1',
+    [id]
+  );
 }
 
 async function updateUser(id: string, updates: any): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const fields = Object.keys(updates).map(key => `${key} = ?`).join(', ');
-    const values = [...Object.values(updates), id];
-    
-    db.run(
-      `UPDATE users SET ${fields}, updated_at = datetime('now') WHERE id = ?`,
-      values,
-      function(err) {
-        if (err) {
-          reject(err);
-        } else {
-          resolve();
-        }
-      }
-    );
-  });
+  const fields = Object.keys(updates).map((key, index) => `${key} = $${index + 1}`).join(', ');
+  const values = [...Object.values(updates), id];
+
+  await execute(
+    `UPDATE users SET ${fields}, updated_at = CURRENT_TIMESTAMP WHERE id = $${values.length}`,
+    values
+  );
 }
 
 async function updateLastLogin(id: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    db.run(
-      'UPDATE users SET last_login = datetime(\'now\') WHERE id = ?',
-      [id],
-      function(err) {
-        if (err) {
-          reject(err);
-        } else {
-          resolve();
-        }
-      }
-    );
-  });
+  await execute(
+    'UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1',
+    [id]
+  );
 }
 
 export default router;

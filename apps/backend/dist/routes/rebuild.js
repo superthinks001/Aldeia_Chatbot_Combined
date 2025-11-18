@@ -13,7 +13,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
-const db_1 = require("../db");
+const client_1 = require("../database/client");
 const logger_1 = require("../utils/logger");
 const auth_1 = require("./auth");
 const sanitizeInput_1 = require("../middleware/sanitizeInput");
@@ -265,132 +265,79 @@ router.get('/preferences', auth_1.authenticateToken, (req, res) => __awaiter(voi
 // ====================================================================
 // HELPER FUNCTIONS - Database Operations
 // ====================================================================
-function getProjects(query, params) {
+function getProjects(sql, params) {
     return __awaiter(this, void 0, void 0, function* () {
-        return new Promise((resolve, reject) => {
-            db_1.db.all(query, params, (err, rows) => {
-                if (err) {
-                    reject(err);
-                }
-                else {
-                    const projects = rows.map((row) => (Object.assign(Object.assign({}, row), { location: JSON.parse(row.location || '{}'), preferences: JSON.parse(row.preferences || '{}') })));
-                    resolve(projects);
-                }
-            });
-        });
+        const rows = yield (0, client_1.query)(sql, params);
+        return rows.map((row) => (Object.assign(Object.assign({}, row), { location: typeof row.location === 'string' ? JSON.parse(row.location) : row.location, preferences: typeof row.preferences === 'string' ? JSON.parse(row.preferences) : row.preferences })));
     });
 }
 function getProjectById(id) {
     return __awaiter(this, void 0, void 0, function* () {
-        return new Promise((resolve, reject) => {
-            db_1.db.get('SELECT * FROM rebuild_projects WHERE id = ?', [id], (err, row) => {
-                if (err) {
-                    reject(err);
-                }
-                else {
-                    if (row) {
-                        const typedRow = row;
-                        resolve(Object.assign(Object.assign({}, typedRow), { location: JSON.parse(typedRow.location || '{}'), preferences: JSON.parse(typedRow.preferences || '{}') }));
-                    }
-                    else {
-                        resolve(null);
-                    }
-                }
-            });
-        });
+        const row = yield (0, client_1.queryOne)('SELECT * FROM rebuild_projects WHERE id = $1', [id]);
+        if (row) {
+            return Object.assign(Object.assign({}, row), { location: typeof row.location === 'string' ? JSON.parse(row.location) : row.location, preferences: typeof row.preferences === 'string' ? JSON.parse(row.preferences) : row.preferences });
+        }
+        return null;
     });
 }
 function createProject(projectData) {
     return __awaiter(this, void 0, void 0, function* () {
-        return new Promise((resolve, reject) => {
-            db_1.db.run(`INSERT INTO rebuild_projects (id, user_id, name, location, preferences, status, created_at, updated_at) 
-       VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`, [
-                projectData.id,
-                projectData.userId,
-                projectData.name,
-                JSON.stringify(projectData.location),
-                JSON.stringify(projectData.preferences),
-                projectData.status
-            ], function (err) {
-                if (err) {
-                    reject(err);
-                }
-                else {
-                    resolve({
-                        id: projectData.id,
-                        userId: projectData.userId,
-                        name: projectData.name,
-                        location: projectData.location,
-                        preferences: projectData.preferences,
-                        status: projectData.status,
-                        createdAt: new Date(),
-                        updatedAt: new Date()
-                    });
-                }
-            });
-        });
+        yield (0, client_1.execute)(`INSERT INTO rebuild_projects (id, user_id, name, location, preferences, status, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`, [
+            projectData.id,
+            projectData.userId,
+            projectData.name,
+            JSON.stringify(projectData.location),
+            JSON.stringify(projectData.preferences),
+            projectData.status
+        ]);
+        return {
+            id: projectData.id,
+            userId: projectData.userId,
+            name: projectData.name,
+            location: projectData.location,
+            preferences: projectData.preferences,
+            status: projectData.status,
+            createdAt: new Date(),
+            updatedAt: new Date()
+        };
     });
 }
 function updateProject(id, updates) {
     return __awaiter(this, void 0, void 0, function* () {
-        return new Promise((resolve, reject) => {
-            const fields = [];
-            const values = [];
-            Object.keys(updates).forEach(key => {
-                if (key === 'location' || key === 'preferences') {
-                    fields.push(`${key} = ?`);
-                    values.push(JSON.stringify(updates[key]));
-                }
-                else {
-                    fields.push(`${key} = ?`);
-                    values.push(updates[key]);
-                }
-            });
-            fields.push('updated_at = datetime(\'now\')');
-            values.push(id);
-            db_1.db.run(`UPDATE rebuild_projects SET ${fields.join(', ')} WHERE id = ?`, values, function (err) {
-                if (err) {
-                    reject(err);
-                }
-                else {
-                    resolve();
-                }
-            });
+        const fields = [];
+        const values = [];
+        let paramIndex = 1;
+        Object.keys(updates).forEach(key => {
+            if (key === 'location' || key === 'preferences') {
+                fields.push(`${key} = $${paramIndex++}`);
+                values.push(JSON.stringify(updates[key]));
+            }
+            else {
+                fields.push(`${key} = $${paramIndex++}`);
+                values.push(updates[key]);
+            }
         });
+        fields.push('updated_at = CURRENT_TIMESTAMP');
+        values.push(id);
+        yield (0, client_1.execute)(`UPDATE rebuild_projects SET ${fields.join(', ')} WHERE id = $${paramIndex}`, values);
     });
 }
 function saveUserPreferences(userId, preferences) {
     return __awaiter(this, void 0, void 0, function* () {
-        return new Promise((resolve, reject) => {
-            db_1.db.run(`INSERT OR REPLACE INTO user_preferences (user_id, preferences, updated_at) 
-       VALUES (?, ?, datetime('now'))`, [userId, JSON.stringify(preferences)], function (err) {
-                if (err) {
-                    reject(err);
-                }
-                else {
-                    resolve();
-                }
-            });
-        });
+        // PostgreSQL uses INSERT...ON CONFLICT instead of INSERT OR REPLACE
+        yield (0, client_1.execute)(`INSERT INTO user_preferences (user_id, preferences, updated_at)
+     VALUES ($1, $2, CURRENT_TIMESTAMP)
+     ON CONFLICT (user_id) DO UPDATE SET preferences = $2, updated_at = CURRENT_TIMESTAMP`, [userId, JSON.stringify(preferences)]);
     });
 }
 function getUserPreferences(userId) {
     return __awaiter(this, void 0, void 0, function* () {
-        return new Promise((resolve, reject) => {
-            db_1.db.get('SELECT preferences FROM user_preferences WHERE user_id = ?', [userId], (err, row) => {
-                if (err) {
-                    reject(err);
-                }
-                else {
-                    if (row) {
-                        resolve(JSON.parse(row.preferences || '{}'));
-                    }
-                    else {
-                        resolve(null);
-                    }
-                }
-            });
-        });
+        const row = yield (0, client_1.queryOne)('SELECT preferences FROM user_preferences WHERE user_id = $1', [userId]);
+        if (row) {
+            return typeof row.preferences === 'string' ? JSON.parse(row.preferences) : row.preferences;
+        }
+        return null;
     });
 }
 exports.default = router;

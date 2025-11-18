@@ -3,8 +3,7 @@
 /**
  * Migration Runner
  *
- * Runs SQL migration files against the configured database
- * Supports both PostgreSQL and SQLite
+ * Runs SQL migration files against PostgreSQL database
  *
  * Usage:
  *   ts-node run-migrations.ts
@@ -27,8 +26,6 @@ exports.runMigrations = main;
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const connection_1 = require("../connection");
-const config_1 = require("../config");
-const util_1 = require("util");
 const MIGRATIONS_DIR = path_1.default.join(__dirname, '../../../..', 'migrations');
 /**
  * Load migration files from disk
@@ -60,24 +57,6 @@ function runPostgresMigration(migration) {
     });
 }
 /**
- * Execute a migration on SQLite
- */
-function runSQLiteMigration(migration) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const db = (0, connection_1.getSQLiteDb)();
-        const execAsync = (0, util_1.promisify)(db.exec.bind(db));
-        console.log(`\n📝 Running migration: ${migration.filename}`);
-        try {
-            yield execAsync(migration.sql);
-            console.log(`✅ ${migration.filename} completed successfully`);
-        }
-        catch (error) {
-            console.error(`❌ ${migration.filename} failed:`, error.message);
-            throw error;
-        }
-    });
-}
-/**
  * Main migration runner
  */
 function main() {
@@ -85,7 +64,7 @@ function main() {
         console.log('='.repeat(60));
         console.log('Database Migration Runner');
         console.log('='.repeat(60));
-        console.log(`Database type: ${(0, config_1.isPostgres)() ? 'PostgreSQL' : 'SQLite'}`);
+        console.log(`Database type: PostgreSQL`);
         console.log(`Migrations directory: ${MIGRATIONS_DIR}`);
         console.log('='.repeat(60));
         try {
@@ -98,12 +77,7 @@ function main() {
             migrations.forEach(m => console.log(`  - ${m.filename}`));
             console.log('\nStarting migrations...');
             for (const migration of migrations) {
-                if ((0, config_1.isPostgres)()) {
-                    yield runPostgresMigration(migration);
-                }
-                else {
-                    yield runSQLiteMigration(migration);
-                }
+                yield runPostgresMigration(migration);
             }
             console.log('\n' + '='.repeat(60));
             console.log('✅ All migrations completed successfully!');

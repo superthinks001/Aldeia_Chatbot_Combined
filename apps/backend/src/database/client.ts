@@ -2,75 +2,46 @@
  * Database Client
  *
  * Provides high-level database operations for the application
- * Maintains backward compatibility with the old SQLite-based API
- * Supports both SQLite and PostgreSQL
+ * PostgreSQL-based implementation
  */
 
-import { query, queryOne, execute, withTransaction, isPostgres } from './connection';
+import { query, queryOne, execute, withTransaction } from './connection';
 
 /**
  * Initialize database schema
  * Creates tables if they don't exist
  */
 export async function initDb(): Promise<void> {
-  if (isPostgres()) {
-    // PostgreSQL schema should be created via migrations
-    // This is a safety check to ensure basic tables exist
-    await execute(`
-      CREATE TABLE IF NOT EXISTS users (
-        id SERIAL PRIMARY KEY,
-        name VARCHAR(255),
-        county VARCHAR(100),
-        email VARCHAR(255) UNIQUE NOT NULL,
-        language VARCHAR(10) DEFAULT 'en',
-        password_hash VARCHAR(255),
-        role VARCHAR(50) DEFAULT 'user',
-        is_active BOOLEAN DEFAULT true,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+  // PostgreSQL schema should be created via migrations
+  // This is a safety check to ensure basic tables exist
+  await execute(`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(255),
+      county VARCHAR(100),
+      email VARCHAR(255) UNIQUE NOT NULL,
+      language VARCHAR(10) DEFAULT 'en',
+      password_hash VARCHAR(255),
+      role VARCHAR(50) DEFAULT 'user',
+      is_active BOOLEAN DEFAULT true,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
 
-    await execute(`
-      CREATE TABLE IF NOT EXISTS analytics (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-        conversation_id UUID,
-        event_type VARCHAR(50) NOT NULL,
-        message TEXT,
-        meta JSONB,
-        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+  await execute(`
+    CREATE TABLE IF NOT EXISTS analytics (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      conversation_id UUID,
+      event_type VARCHAR(50) NOT NULL,
+      message TEXT,
+      meta JSONB,
+      timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
 
-    console.log('✅ PostgreSQL schema initialized');
-  } else {
-    // SQLite schema (original)
-    await execute(`
-      CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT,
-        county TEXT,
-        email TEXT,
-        language TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    await execute(`
-      CREATE TABLE IF NOT EXISTS analytics (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        conversation_id TEXT,
-        event_type TEXT,
-        message TEXT,
-        meta TEXT,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    console.log('✅ SQLite schema initialized');
-  }
+  console.log('✅ PostgreSQL schema initialized');
 }
 
 /**
@@ -101,19 +72,11 @@ export async function addOrUpdateUser(profile: {
     return existingUser.id;
   } else {
     // Insert new user
-    if (isPostgres()) {
-      const result = await queryOne<{ id: number }>(
-        'INSERT INTO users (name, county, email, language) VALUES ($1, $2, $3, $4) RETURNING id',
-        [profile.name, profile.county, profile.email, profile.language]
-      );
-      return result!.id;
-    } else {
-      const result = await execute(
-        'INSERT INTO users (name, county, email, language) VALUES (?, ?, ?, ?)',
-        [profile.name, profile.county, profile.email, profile.language]
-      );
-      return result.lastId!;
-    }
+    const result = await queryOne<{ id: number }>(
+      'INSERT INTO users (name, county, email, language) VALUES ($1, $2, $3, $4) RETURNING id',
+      [profile.name, profile.county, profile.email, profile.language]
+    );
+    return result!.id;
   }
 }
 
@@ -129,29 +92,16 @@ export async function logAnalytics(event: {
 }): Promise<void> {
   const metaValue = event.meta ? JSON.stringify(event.meta) : null;
 
-  if (isPostgres()) {
-    await execute(
-      'INSERT INTO analytics (user_id, conversation_id, event_type, message, meta) VALUES ($1, $2, $3, $4, $5::jsonb)',
-      [
-        event.user_id || null,
-        event.conversation_id || null,
-        event.event_type,
-        event.message || null,
-        metaValue
-      ]
-    );
-  } else {
-    await execute(
-      'INSERT INTO analytics (user_id, conversation_id, event_type, message, meta) VALUES (?, ?, ?, ?, ?)',
-      [
-        event.user_id || null,
-        event.conversation_id || null,
-        event.event_type,
-        event.message || null,
-        metaValue
-      ]
-    );
-  }
+  await execute(
+    'INSERT INTO analytics (user_id, conversation_id, event_type, message, meta) VALUES ($1, $2, $3, $4, $5::jsonb)',
+    [
+      event.user_id || null,
+      event.conversation_id || null,
+      event.event_type,
+      event.message || null,
+      metaValue
+    ]
+  );
 }
 
 /**
@@ -193,17 +143,10 @@ export async function getAnalyticsByUser(
   userId: number,
   limit: number = 100
 ): Promise<any[]> {
-  if (isPostgres()) {
-    return await query(
-      'SELECT * FROM analytics WHERE user_id = $1 ORDER BY timestamp DESC LIMIT $2',
-      [userId, limit]
-    );
-  } else {
-    return await query(
-      'SELECT * FROM analytics WHERE user_id = ? ORDER BY timestamp DESC LIMIT ?',
-      [userId, limit]
-    );
-  }
+  return await query(
+    'SELECT * FROM analytics WHERE user_id = $1 ORDER BY timestamp DESC LIMIT $2',
+    [userId, limit]
+  );
 }
 
 /**
@@ -213,17 +156,10 @@ export async function getAnalyticsByConversation(
   conversationId: string,
   limit: number = 100
 ): Promise<any[]> {
-  if (isPostgres()) {
-    return await query(
-      'SELECT * FROM analytics WHERE conversation_id = $1 ORDER BY timestamp ASC LIMIT $2',
-      [conversationId, limit]
-    );
-  } else {
-    return await query(
-      'SELECT * FROM analytics WHERE conversation_id = ? ORDER BY timestamp ASC LIMIT ?',
-      [conversationId, limit]
-    );
-  }
+  return await query(
+    'SELECT * FROM analytics WHERE conversation_id = $1 ORDER BY timestamp ASC LIMIT $2',
+    [conversationId, limit]
+  );
 }
 
 /**
@@ -270,10 +206,7 @@ export async function updateUser(
     return; // Nothing to update
   }
 
-  if (isPostgres()) {
-    fields.push(`updated_at = CURRENT_TIMESTAMP`);
-  }
-
+  fields.push(`updated_at = CURRENT_TIMESTAMP`);
   values.push(id);
 
   const sql = `UPDATE users SET ${fields.join(', ')} WHERE id = $${paramIndex}`;
@@ -284,17 +217,10 @@ export async function updateUser(
  * Get recent analytics (last N records)
  */
 export async function getRecentAnalytics(limit: number = 50): Promise<any[]> {
-  if (isPostgres()) {
-    return await query(
-      'SELECT * FROM analytics ORDER BY timestamp DESC LIMIT $1',
-      [limit]
-    );
-  } else {
-    return await query(
-      'SELECT * FROM analytics ORDER BY timestamp DESC LIMIT ?',
-      [limit]
-    );
-  }
+  return await query(
+    'SELECT * FROM analytics ORDER BY timestamp DESC LIMIT $1',
+    [limit]
+  );
 }
 
 /**
@@ -324,4 +250,4 @@ export async function countAnalyticsByType(
 
 // Re-export connection utilities for advanced usage
 export { query, queryOne, execute, withTransaction } from './connection';
-export { isPostgres, isSQLite, getDatabaseType } from './config';
+export { isPostgres, getDatabaseType } from './config';

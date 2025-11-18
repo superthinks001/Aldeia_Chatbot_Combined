@@ -1,26 +1,17 @@
 /**
  * Database Interface
  *
- * Unified database interface supporting both SQLite and PostgreSQL
- * Automatically switches based on environment configuration
- *
- * For new code, prefer using async/await functions from './database/client'
- * This file maintains backward compatibility with callback-based API
+ * Database interface for PostgreSQL
+ * Uses async/await functions from './database/client'
  */
 
-// Re-export everything from db-legacy for backward compatibility
-export * from './db-legacy';
-
-// Export raw db object for legacy code (deprecated)
-export { db } from './database/raw-db';
-
-// Also export the modern async API for new code
+// Export the modern async API
 export {
-  initDb as initDbAsync,
-  addOrUpdateUser as addOrUpdateUserAsync,
-  logAnalytics as logAnalyticsAsync,
-  getAnalyticsSummary as getAnalyticsSummaryAsync,
-  getUsers as getUsersAsync,
+  initDb,
+  addOrUpdateUser,
+  logAnalytics,
+  getAnalyticsSummary,
+  getUsers,
   getUserById,
   getUserByEmail,
   getAnalyticsByUser,
@@ -34,6 +25,5 @@ export {
   execute,
   withTransaction,
   isPostgres,
-  isSQLite,
   getDatabaseType
 } from './database/client';

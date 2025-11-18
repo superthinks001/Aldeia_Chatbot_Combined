@@ -44,7 +44,7 @@ exports.SUBSCRIPTION_PLANS = {
     [SubscriptionTier.PRO]: {
         tier: SubscriptionTier.PRO,
         name: 'Pro Tier',
-        price: 999, // $9.99
+        price: 9999, // $99.99
         messagesLimit: 100,
         features: [
             '100 messages per day',
@@ -57,7 +57,7 @@ exports.SUBSCRIPTION_PLANS = {
     [SubscriptionTier.ENTERPRISE]: {
         tier: SubscriptionTier.ENTERPRISE,
         name: 'Enterprise Tier',
-        price: 4999, // $49.99
+        price: 49999, // $499.99
         messagesLimit: -1, // unlimited
         features: [
             'Unlimited messages',

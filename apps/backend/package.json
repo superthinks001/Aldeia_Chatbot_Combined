@@ -14,7 +14,7 @@
     "db:migrate:supabase": "ts-node src/database/migrate.ts",
     "db:seed": "ts-node src/database/seeds/dev-data.ts",
     "db:seed:dev": "npm run db:seed",
-    "db:reset": "rm -f aldeia.db && npm run db:migrate && npm run db:seed",
+    "db:reset": "npm run db:migrate && npm run db:seed",
     "migrate": "ts-node src/database/migrate.ts",
     "migrate:create": "node src/database/create-migration.js",
     "migrate:data": "ts-node src/database/migrate-data.ts"
@@ -43,7 +43,6 @@
     "pdf-parse": "^1.1.1",
     "pg": "^8.16.3",
     "socket.io": "^4.8.1",
-    "sqlite3": "^5.1.6",
     "stripe": "^19.3.0",
     "winston": "^3.10.0"
   },

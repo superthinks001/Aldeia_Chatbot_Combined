@@ -1,7 +1,7 @@
 import express, { Request, Response } from 'express';
 import multer from 'multer';
 import path from 'path';
-import { db } from '../db';
+import { query, queryOne, execute } from '../database/client';
 import { logger } from '../utils/logger';
 import { authenticateToken } from './auth';
 import { ApiResponse, Document } from '@aldeia/shared-types';
@@ -217,78 +217,45 @@ router.delete('/:id', authenticateToken, async (req: Request, res: Response) => 
 // HELPER FUNCTIONS - Database Operations
 // ====================================================================
 
-async function getDocuments(query: string, params: any[]): Promise<any[]> {
-  return new Promise((resolve, reject) => {
-    db.all(query, params, (err, rows) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(rows || []);
-      }
-    });
-  });
+async function getDocuments(sql: string, params: any[]): Promise<any[]> {
+  return await query(sql, params);
 }
 
 async function getDocumentById(id: string): Promise<any> {
-  return new Promise((resolve, reject) => {
-    db.get(
-      'SELECT * FROM documents WHERE id = ?',
-      [id],
-      (err, row) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(row);
-        }
-      }
-    );
-  });
+  return await queryOne(
+    'SELECT * FROM documents WHERE id = $1',
+    [id]
+  );
 }
 
 async function createDocument(documentData: any): Promise<Document> {
-  return new Promise((resolve, reject) => {
-    db.run(
-      `INSERT INTO documents (id, filename, content, file_path, uploaded_by, metadata, created_at) 
-       VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`,
-      [
-        documentData.id,
-        documentData.filename,
-        documentData.content,
-        documentData.filePath,
-        documentData.uploadedBy,
-        JSON.stringify(documentData.metadata)
-      ],
-      function(err) {
-        if (err) {
-          reject(err);
-        } else {
-          resolve({
-            id: documentData.id,
-            filename: documentData.filename,
-            content: documentData.content,
-            createdAt: new Date(),
-            metadata: documentData.metadata
-          } as Document);
-        }
-      }
-    );
-  });
+  await execute(
+    `INSERT INTO documents (id, filename, content, file_path, uploaded_by, metadata, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)`,
+    [
+      documentData.id,
+      documentData.filename,
+      documentData.content,
+      documentData.filePath,
+      documentData.uploadedBy,
+      JSON.stringify(documentData.metadata)
+    ]
+  );
+
+  return {
+    id: documentData.id,
+    filename: documentData.filename,
+    content: documentData.content,
+    createdAt: new Date(),
+    metadata: documentData.metadata
+  } as Document;
 }
 
 async function deleteDocument(id: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    db.run(
-      'DELETE FROM documents WHERE id = ?',
-      [id],
-      function(err) {
-        if (err) {
-          reject(err);
-        } else {
-          resolve();
-        }
-      }
-    );
-  });
+  await execute(
+    'DELETE FROM documents WHERE id = $1',
+    [id]
+  );
 }
 
 export default router;

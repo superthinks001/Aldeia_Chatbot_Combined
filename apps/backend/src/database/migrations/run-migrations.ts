@@ -2,8 +2,7 @@
 /**
  * Migration Runner
  *
- * Runs SQL migration files against the configured database
- * Supports both PostgreSQL and SQLite
+ * Runs SQL migration files against PostgreSQL database
  *
  * Usage:
  *   ts-node run-migrations.ts
@@ -12,9 +11,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { getPool, getSQLiteDb } from '../connection';
-import { isPostgres } from '../config';
-import { promisify } from 'util';
+import { getPool } from '../connection';
 
 const MIGRATIONS_DIR = path.join(__dirname, '../../../..', 'migrations');
 
@@ -54,31 +51,13 @@ async function runPostgresMigration(migration: Migration): Promise<void> {
 }
 
 /**
- * Execute a migration on SQLite
- */
-async function runSQLiteMigration(migration: Migration): Promise<void> {
-  const db = getSQLiteDb();
-  const execAsync = promisify(db.exec.bind(db));
-
-  console.log(`\n📝 Running migration: ${migration.filename}`);
-
-  try {
-    await execAsync(migration.sql);
-    console.log(`✅ ${migration.filename} completed successfully`);
-  } catch (error: any) {
-    console.error(`❌ ${migration.filename} failed:`, error.message);
-    throw error;
-  }
-}
-
-/**
  * Main migration runner
  */
 async function main() {
   console.log('='.repeat(60));
   console.log('Database Migration Runner');
   console.log('='.repeat(60));
-  console.log(`Database type: ${isPostgres() ? 'PostgreSQL' : 'SQLite'}`);
+  console.log(`Database type: PostgreSQL`);
   console.log(`Migrations directory: ${MIGRATIONS_DIR}`);
   console.log('='.repeat(60));
 
@@ -96,11 +75,7 @@ async function main() {
     console.log('\nStarting migrations...');
 
     for (const migration of migrations) {
-      if (isPostgres()) {
-        await runPostgresMigration(migration);
-      } else {
-        await runSQLiteMigration(migration);
-      }
+      await runPostgresMigration(migration);
     }
 
     console.log('\n' + '='.repeat(60));

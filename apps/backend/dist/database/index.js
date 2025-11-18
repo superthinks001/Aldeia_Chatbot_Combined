@@ -2,18 +2,16 @@
 /**
  * Database Module - Main Entry Point
  *
- * This module provides a unified database interface supporting both SQLite and PostgreSQL.
- * It automatically switches between databases based on environment configuration.
+ * This module provides a database interface for PostgreSQL.
  *
  * Usage:
  *   import { initDb, addOrUpdateUser, logAnalytics } from './database';
  *
  * Configuration:
- *   Set USE_SQLITE=false to use PostgreSQL
  *   Set DATABASE_URL or SUPABASE_DB_URL for PostgreSQL connection
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.healthCheck = exports.closeConnection = exports.initConnection = exports.validateConfig = exports.getDatabaseConfig = exports.getDatabaseType = exports.isSQLite = exports.isPostgres = exports.withTransaction = exports.execute = exports.queryOne = exports.query = exports.countAnalyticsByType = exports.getRecentAnalytics = exports.updateUser = exports.deleteUser = exports.getAnalyticsByConversation = exports.getAnalyticsByUser = exports.getUserByEmail = exports.getUserById = exports.getUsers = exports.getAnalyticsSummary = exports.logAnalytics = exports.addOrUpdateUser = exports.initDb = void 0;
+exports.healthCheck = exports.closeConnection = exports.initConnection = exports.validateConfig = exports.getDatabaseConfig = exports.getDatabaseType = exports.isPostgres = exports.withTransaction = exports.execute = exports.queryOne = exports.query = exports.countAnalyticsByType = exports.getRecentAnalytics = exports.updateUser = exports.deleteUser = exports.getAnalyticsByConversation = exports.getAnalyticsByUser = exports.getUserByEmail = exports.getUserById = exports.getUsers = exports.getAnalyticsSummary = exports.logAnalytics = exports.addOrUpdateUser = exports.initDb = void 0;
 // Export database client functions
 var client_1 = require("./client");
 Object.defineProperty(exports, "initDb", { enumerable: true, get: function () { return client_1.initDb; } });
@@ -34,7 +32,6 @@ Object.defineProperty(exports, "queryOne", { enumerable: true, get: function () 
 Object.defineProperty(exports, "execute", { enumerable: true, get: function () { return client_1.execute; } });
 Object.defineProperty(exports, "withTransaction", { enumerable: true, get: function () { return client_1.withTransaction; } });
 Object.defineProperty(exports, "isPostgres", { enumerable: true, get: function () { return client_1.isPostgres; } });
-Object.defineProperty(exports, "isSQLite", { enumerable: true, get: function () { return client_1.isSQLite; } });
 Object.defineProperty(exports, "getDatabaseType", { enumerable: true, get: function () { return client_1.getDatabaseType; } });
 // Export configuration utilities
 var config_1 = require("./config");

@@ -3,8 +3,7 @@
  * Database Client
  *
  * Provides high-level database operations for the application
- * Maintains backward compatibility with the old SQLite-based API
- * Supports both SQLite and PostgreSQL
+ * PostgreSQL-based implementation
  */
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
@@ -16,7 +15,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getDatabaseType = exports.isSQLite = exports.isPostgres = exports.withTransaction = exports.execute = exports.queryOne = exports.query = void 0;
+exports.getDatabaseType = exports.isPostgres = exports.withTransaction = exports.execute = exports.queryOne = exports.query = void 0;
 exports.initDb = initDb;
 exports.addOrUpdateUser = addOrUpdateUser;
 exports.logAnalytics = logAnalytics;
@@ -37,61 +36,34 @@ const connection_1 = require("./connection");
  */
 function initDb() {
     return __awaiter(this, void 0, void 0, function* () {
-        if ((0, connection_1.isPostgres)()) {
-            // PostgreSQL schema should be created via migrations
-            // This is a safety check to ensure basic tables exist
-            yield (0, connection_1.execute)(`
-      CREATE TABLE IF NOT EXISTS users (
-        id SERIAL PRIMARY KEY,
-        name VARCHAR(255),
-        county VARCHAR(100),
-        email VARCHAR(255) UNIQUE NOT NULL,
-        language VARCHAR(10) DEFAULT 'en',
-        password_hash VARCHAR(255),
-        role VARCHAR(50) DEFAULT 'user',
-        is_active BOOLEAN DEFAULT true,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-            yield (0, connection_1.execute)(`
-      CREATE TABLE IF NOT EXISTS analytics (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-        conversation_id UUID,
-        event_type VARCHAR(50) NOT NULL,
-        message TEXT,
-        meta JSONB,
-        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-            console.log('✅ PostgreSQL schema initialized');
-        }
-        else {
-            // SQLite schema (original)
-            yield (0, connection_1.execute)(`
-      CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT,
-        county TEXT,
-        email TEXT,
-        language TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-            yield (0, connection_1.execute)(`
-      CREATE TABLE IF NOT EXISTS analytics (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        conversation_id TEXT,
-        event_type TEXT,
-        message TEXT,
-        meta TEXT,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-            console.log('✅ SQLite schema initialized');
-        }
+        // PostgreSQL schema should be created via migrations
+        // This is a safety check to ensure basic tables exist
+        yield (0, connection_1.execute)(`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(255),
+      county VARCHAR(100),
+      email VARCHAR(255) UNIQUE NOT NULL,
+      language VARCHAR(10) DEFAULT 'en',
+      password_hash VARCHAR(255),
+      role VARCHAR(50) DEFAULT 'user',
+      is_active BOOLEAN DEFAULT true,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+        yield (0, connection_1.execute)(`
+    CREATE TABLE IF NOT EXISTS analytics (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      conversation_id UUID,
+      event_type VARCHAR(50) NOT NULL,
+      message TEXT,
+      meta JSONB,
+      timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+        console.log('✅ PostgreSQL schema initialized');
     });
 }
 /**
@@ -111,14 +83,8 @@ function addOrUpdateUser(profile) {
         }
         else {
             // Insert new user
-            if ((0, connection_1.isPostgres)()) {
-                const result = yield (0, connection_1.queryOne)('INSERT INTO users (name, county, email, language) VALUES ($1, $2, $3, $4) RETURNING id', [profile.name, profile.county, profile.email, profile.language]);
-                return result.id;
-            }
-            else {
-                const result = yield (0, connection_1.execute)('INSERT INTO users (name, county, email, language) VALUES (?, ?, ?, ?)', [profile.name, profile.county, profile.email, profile.language]);
-                return result.lastId;
-            }
+            const result = yield (0, connection_1.queryOne)('INSERT INTO users (name, county, email, language) VALUES ($1, $2, $3, $4) RETURNING id', [profile.name, profile.county, profile.email, profile.language]);
+            return result.id;
         }
     });
 }
@@ -128,24 +94,13 @@ function addOrUpdateUser(profile) {
 function logAnalytics(event) {
     return __awaiter(this, void 0, void 0, function* () {
         const metaValue = event.meta ? JSON.stringify(event.meta) : null;
-        if ((0, connection_1.isPostgres)()) {
-            yield (0, connection_1.execute)('INSERT INTO analytics (user_id, conversation_id, event_type, message, meta) VALUES ($1, $2, $3, $4, $5::jsonb)', [
-                event.user_id || null,
-                event.conversation_id || null,
-                event.event_type,
-                event.message || null,
-                metaValue
-            ]);
-        }
-        else {
-            yield (0, connection_1.execute)('INSERT INTO analytics (user_id, conversation_id, event_type, message, meta) VALUES (?, ?, ?, ?, ?)', [
-                event.user_id || null,
-                event.conversation_id || null,
-                event.event_type,
-                event.message || null,
-                metaValue
-            ]);
-        }
+        yield (0, connection_1.execute)('INSERT INTO analytics (user_id, conversation_id, event_type, message, meta) VALUES ($1, $2, $3, $4, $5::jsonb)', [
+            event.user_id || null,
+            event.conversation_id || null,
+            event.event_type,
+            event.message || null,
+            metaValue
+        ]);
     });
 }
 /**
@@ -185,12 +140,7 @@ function getUserByEmail(email) {
  */
 function getAnalyticsByUser(userId_1) {
     return __awaiter(this, arguments, void 0, function* (userId, limit = 100) {
-        if ((0, connection_1.isPostgres)()) {
-            return yield (0, connection_1.query)('SELECT * FROM analytics WHERE user_id = $1 ORDER BY timestamp DESC LIMIT $2', [userId, limit]);
-        }
-        else {
-            return yield (0, connection_1.query)('SELECT * FROM analytics WHERE user_id = ? ORDER BY timestamp DESC LIMIT ?', [userId, limit]);
-        }
+        return yield (0, connection_1.query)('SELECT * FROM analytics WHERE user_id = $1 ORDER BY timestamp DESC LIMIT $2', [userId, limit]);
     });
 }
 /**
@@ -198,12 +148,7 @@ function getAnalyticsByUser(userId_1) {
  */
 function getAnalyticsByConversation(conversationId_1) {
     return __awaiter(this, arguments, void 0, function* (conversationId, limit = 100) {
-        if ((0, connection_1.isPostgres)()) {
-            return yield (0, connection_1.query)('SELECT * FROM analytics WHERE conversation_id = $1 ORDER BY timestamp ASC LIMIT $2', [conversationId, limit]);
-        }
-        else {
-            return yield (0, connection_1.query)('SELECT * FROM analytics WHERE conversation_id = ? ORDER BY timestamp ASC LIMIT ?', [conversationId, limit]);
-        }
+        return yield (0, connection_1.query)('SELECT * FROM analytics WHERE conversation_id = $1 ORDER BY timestamp ASC LIMIT $2', [conversationId, limit]);
     });
 }
 /**
@@ -241,9 +186,7 @@ function updateUser(id, updates) {
         if (fields.length === 0) {
             return; // Nothing to update
         }
-        if ((0, connection_1.isPostgres)()) {
-            fields.push(`updated_at = CURRENT_TIMESTAMP`);
-        }
+        fields.push(`updated_at = CURRENT_TIMESTAMP`);
         values.push(id);
         const sql = `UPDATE users SET ${fields.join(', ')} WHERE id = $${paramIndex}`;
         yield (0, connection_1.execute)(sql, values);
@@ -254,12 +197,7 @@ function updateUser(id, updates) {
  */
 function getRecentAnalytics() {
     return __awaiter(this, arguments, void 0, function* (limit = 50) {
-        if ((0, connection_1.isPostgres)()) {
-            return yield (0, connection_1.query)('SELECT * FROM analytics ORDER BY timestamp DESC LIMIT $1', [limit]);
-        }
-        else {
-            return yield (0, connection_1.query)('SELECT * FROM analytics ORDER BY timestamp DESC LIMIT ?', [limit]);
-        }
+        return yield (0, connection_1.query)('SELECT * FROM analytics ORDER BY timestamp DESC LIMIT $1', [limit]);
     });
 }
 /**
@@ -289,5 +227,4 @@ Object.defineProperty(exports, "execute", { enumerable: true, get: function () {
 Object.defineProperty(exports, "withTransaction", { enumerable: true, get: function () { return connection_2.withTransaction; } });
 var config_1 = require("./config");
 Object.defineProperty(exports, "isPostgres", { enumerable: true, get: function () { return config_1.isPostgres; } });
-Object.defineProperty(exports, "isSQLite", { enumerable: true, get: function () { return config_1.isSQLite; } });
 Object.defineProperty(exports, "getDatabaseType", { enumerable: true, get: function () { return config_1.getDatabaseType; } });
