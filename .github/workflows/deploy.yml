@@ -115,7 +115,7 @@ jobs:
           cat > .env.production << EOF
           NODE_ENV=production
           BACKEND_PORT=3001
-          CHATBOT_FRONTEND_PORT=3002
+          CHATBOT_FRONTEND_PORT=3000
           REBUILD_PLATFORM_PORT=3000
 
           SUPABASE_URL=${{ secrets.SUPABASE_URL }}
