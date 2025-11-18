@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-require('dotenv').config({ path: '.env.merge' });
+require('dotenv').config({ path: 'apps/backend/.env' });
 const { Pool } = require('pg');
 const sqlite3 = require('sqlite3');
 

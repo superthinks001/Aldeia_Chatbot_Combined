@@ -20,7 +20,7 @@ import { tenantMiddleware } from './middleware/tenant.middleware';
 import { initializeWebSocket } from './websocket/socket.server';
 
 // Load environment
-dotenv.config({ path: path.join(__dirname, '../../.env.merge') });
+dotenv.config({ path: path.join(__dirname, '../.env') });
 
 const app = express();
 const PORT = process.env.BACKEND_PORT || 3001;

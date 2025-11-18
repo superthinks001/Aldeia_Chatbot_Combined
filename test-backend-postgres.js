@@ -3,7 +3,7 @@
  * Test Backend with PostgreSQL
  */
 
-require('dotenv').config({ path: '.env.merge' });
+require('dotenv').config({ path: 'apps/backend/.env' });
 
 // Use ts-node to load TypeScript files
 require('ts-node/register');
@@ -27,7 +27,7 @@ async function testBackend() {
 
     if (!db.isPostgres()) {
       console.error('\n  ❌ ERROR: Backend is still using SQLite!');
-      console.error('  Please check .env.merge: USE_SQLITE should be false');
+      console.error('  Please check apps/backend/.env: USE_SQLITE should be false');
       process.exit(1);
     }
 

@@ -5,7 +5,7 @@
  * Verifies that Supabase credentials are correct and connection works
  */
 
-require('dotenv').config({ path: '.env.merge' });
+require('dotenv').config({ path: 'apps/backend/.env' });
 const { createClient } = require('@supabase/supabase-js');
 const { Pool } = require('pg');
 
@@ -175,7 +175,7 @@ async function main() {
     console.log('  2. Run data migration:');
     console.log('     node migrations/migrate-from-sqlite.js');
     console.log('  3. Switch to PostgreSQL:');
-    console.log('     Set USE_SQLITE=false in .env.merge');
+    console.log('     Set USE_SQLITE=false in apps/backend/.env');
     console.log('');
     process.exit(0);
   } else {

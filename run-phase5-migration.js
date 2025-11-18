@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 // Load environment variables
-require('dotenv').config({ path: '.env.merge' });
+require('dotenv').config({ path: 'apps/backend/.env' });
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

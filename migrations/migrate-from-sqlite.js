@@ -8,7 +8,7 @@
  *   node migrate-from-sqlite.js
  *
  * Prerequisites:
- *   - .env.merge file configured with DATABASE_URL
+ *   - ../apps/backend/.env file configured with DATABASE_URL
  *   - Schema already created (run 001_create_schema.sql first)
  *   - SQLite database exists at ./aldeia.db
  */
@@ -16,7 +16,7 @@
 const sqlite3 = require('sqlite3').verbose();
 const { Pool } = require('pg');
 const bcrypt = require('bcrypt');
-require('dotenv').config({ path: '.env.merge' });
+require('dotenv').config({ path: '../apps/backend/.env' });
 
 // Configuration
 const SQLITE_DB_PATH = './aldeia.db';

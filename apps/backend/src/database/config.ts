@@ -10,7 +10,6 @@ import path from 'path';
 
 // Load environment variables
 dotenv.config({ path: path.join(__dirname, '../../../.env') });
-dotenv.config({ path: path.join(__dirname, '../../../../.env.merge') });
 
 export interface DatabaseConfig {
   type: 'postgres';

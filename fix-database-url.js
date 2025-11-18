@@ -6,10 +6,10 @@
 const fs = require('fs');
 const path = require('path');
 
-console.log('🔧 Fixing DATABASE_URL in .env.merge\n');
+console.log('🔧 Fixing DATABASE_URL in apps/backend/.env\n');
 
-// Read .env.merge
-const envPath = path.join(__dirname, '.env.merge');
+// Read apps/backend/.env
+const envPath = path.join(__dirname, 'apps/backend/.env');
 const envContent = fs.readFileSync(envPath, 'utf8');
 
 // Extract current DATABASE_URL
@@ -41,7 +41,7 @@ const newDatabaseUrl = `postgresql://postgres:${encodedPassword}@${host}:${port}
 
 console.log(`\nNew DATABASE_URL:\n${newDatabaseUrl}`);
 
-// Update .env.merge
+// Update apps/backend/.env
 const newEnvContent = envContent.replace(
   /DATABASE_URL=.*/,
   `DATABASE_URL=${newDatabaseUrl}`
@@ -49,10 +49,10 @@ const newEnvContent = envContent.replace(
 
 // Backup original
 fs.writeFileSync(envPath + '.backup', envContent);
-console.log('\n✅ Backed up original to .env.merge.backup');
+console.log('\n✅ Backed up original to apps/backend/.env.backup');
 
 // Write new content
 fs.writeFileSync(envPath, newEnvContent);
-console.log('✅ Updated .env.merge with encoded password');
+console.log('✅ Updated apps/backend/.env with encoded password');
 
 console.log('\n📝 You can now run: node test-supabase-connection.js');

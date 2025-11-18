@@ -68,9 +68,10 @@ infra/.terraform/
 
 # Environment variables
 .env
-.env.*
+.env.local
+.env.*.local
 !.env.example
-.env.merge
+!.env.production.example
 
 # Secrets
 secrets/

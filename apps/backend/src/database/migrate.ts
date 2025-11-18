@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as dotenv from 'dotenv';
 
 // Load environment variables
-dotenv.config({ path: path.join(__dirname, '../../../../.env.merge') });
+dotenv.config({ path: path.join(__dirname, '../../../.env') });
 
 const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;

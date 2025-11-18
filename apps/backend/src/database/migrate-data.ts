@@ -3,7 +3,7 @@ import sqlite3 from 'sqlite3';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
 
-dotenv.config({ path: path.join(__dirname, '../../../../.env.merge') });
+dotenv.config({ path: path.join(__dirname, '../../../.env') });
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,

@@ -4,7 +4,7 @@
  * Tests only what we can verify with current credentials
  */
 
-require('dotenv').config({ path: '.env.merge' });
+require('dotenv').config({ path: 'apps/backend/.env' });
 const { createClient } = require('@supabase/supabase-js');
 
 console.log('='.repeat(60));

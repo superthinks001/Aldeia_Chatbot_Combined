@@ -1,12 +1,12 @@
 const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');
-require('dotenv').config({ path: '.env.merge' });
+require('dotenv').config({ path: 'apps/backend/.env' });
 
 const DATABASE_URL = process.env.DATABASE_URL;
 
 if (!DATABASE_URL) {
-  console.error('❌ Missing DATABASE_URL in .env.merge');
+  console.error('❌ Missing DATABASE_URL in apps/backend/.env');
   process.exit(1);
 }
 

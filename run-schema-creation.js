@@ -3,7 +3,7 @@
  * Run Schema Creation on Supabase
  */
 
-require('dotenv').config({ path: '.env.merge' });
+require('dotenv').config({ path: 'apps/backend/.env' });
 const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');

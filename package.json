@@ -14,7 +14,7 @@
     "clean": "npm run clean --workspaces",
     "backend:dev": "npm run dev -w apps/backend",
     "frontend:dev": "npm run dev -w apps/chatbot-frontend",
-    "migrate:data": "ts-node src/database/migrate-data.ts"
+    "migrate:data": "npm run migrate:data -w apps/backend"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",

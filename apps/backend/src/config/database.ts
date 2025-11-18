@@ -3,7 +3,7 @@ import * as dotenv from 'dotenv';
 import path from 'path';
 
 // Load environment variables
-dotenv.config({ path: path.join(__dirname, '../../../../.env.merge') });
+dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 // ============================================
 // PostgreSQL/Supabase Connection
