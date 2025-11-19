@@ -1,0 +1,103 @@
+# ============================================
+# ALDEIA CHATBOT - LOCAL DEVELOPMENT SETUP
+# ============================================
+# Complete development environment with all dependencies
+# Usage: docker-compose -f docker-compose.dev.yml up -d
+# ============================================
+
+services:
+  # ============================================
+  # REDIS - Caching & Session Storage
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: aldeia-redis-dev
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: >
+      redis-server
+      --appendonly yes
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - redis-dev-data:/data
+    networks:
+      - aldeia-dev-network
+
+  # ============================================
+  # CHROMADB - Vector Database for RAG
+  # ============================================
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: aldeia-chromadb-dev
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+      - ALLOW_RESET=TRUE
+    healthcheck:
+       test: ["CMD", "curl", "-f", "http://localhost:8000/api/v2/heartbeat"]
+       interval: 10s
+       timeout: 5s
+       retries: 5
+    volumes:
+      - chromadb-dev-data:/chroma/chroma
+    networks:
+      - aldeia-dev-network
+
+# ============================================
+# NETWORKS
+# ============================================
+networks:
+  aldeia-dev-network:
+    driver: bridge
+
+# ============================================
+# VOLUMES
+# ============================================
+volumes:
+  redis-dev-data:
+    driver: local
+  chromadb-dev-data:
+    driver: local
+
+# ============================================
+# USAGE INSTRUCTIONS:
+# ============================================
+# 1. Start all services:
+#    docker-compose -f docker-compose.dev.yml up -d
+#
+# 2. View logs:
+#    docker-compose -f docker-compose.dev.yml logs -f
+#
+# 3. Stop all services:
+#    docker-compose -f docker-compose.dev.yml down
+#
+# 4. Stop and remove volumes (CAUTION: deletes all data):
+#    docker-compose -f docker-compose.dev.yml down -v
+#
+# 5. Check service health:
+#    docker-compose -f docker-compose.dev.yml ps
+#
+# 6. Access services:
+#    - Redis: localhost:6379
+#    - ChromaDB: http://localhost:8000
+#
+# 7. Test connections:
+#    - Redis: redis-cli ping
+#    - ChromaDB: curl http://localhost:8000/api/v2/heartbeat
+#
+# 8. Run your backend/frontend natively on Windows:
+#    - Backend: cd apps/backend && npm run dev
+#    - Frontend: cd apps/chatbot-frontend && npm start
+#    - They will connect to the Docker services automatically
+# ============================================

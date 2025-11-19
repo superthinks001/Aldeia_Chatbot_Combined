@@ -64,8 +64,8 @@ run_test "Frontend Load" "curl -f http://$HOST:3000/"
 run_test "Redis Connection" "docker exec aldeia-redis redis-cli ping 2>/dev/null | grep -q PONG || docker-compose exec -T redis redis-cli ping 2>/dev/null | grep -q PONG"
 
 # ChromaDB is optional
-if curl -s http://$HOST:8000/api/v1/heartbeat > /dev/null 2>&1; then
-    run_test "ChromaDB Health" "curl -f http://$HOST:8000/api/v1/heartbeat"
+if curl -s http://$HOST:8000/api/v2/heartbeat > /dev/null 2>&1; then
+    run_test "ChromaDB Health" "curl -f http://$HOST:8000/api/v2/heartbeat"
 else
     echo -e "Testing: ChromaDB Health... ${YELLOW}⚠️  SKIP (optional)${NC}"
 fi
