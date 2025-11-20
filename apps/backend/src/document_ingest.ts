@@ -1,7 +1,6 @@
 import fs from 'fs';
 import path from 'path';
 import pdfParse from 'pdf-parse';
-import { pipeline } from '@xenova/transformers';
 import { ChromaClient } from 'chromadb';
 
 // Use the workspace root (two levels up from backend/src)
@@ -36,6 +35,9 @@ function chunkByParagraph(text: string): string[] {
 }
 
 export async function reindexAllDocuments() {
+  // Dynamically import @xenova/transformers to handle ES module
+  const { pipeline } = await import('@xenova/transformers');
+
   // Initialize MiniLM embedding pipeline
   const embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
 

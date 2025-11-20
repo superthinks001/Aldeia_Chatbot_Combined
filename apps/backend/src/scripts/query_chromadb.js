@@ -1,5 +1,4 @@
 const { ChromaClient } = require('chromadb');
-const { pipeline } = require('@xenova/transformers');
 
 async function query() {
   try {
@@ -8,6 +7,7 @@ async function query() {
 
     // Load the same embedding model used during ingestion
     console.log('Loading embedding model...');
+    const { pipeline } = await import('@xenova/transformers');
     const embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
     console.log('✅ Model loaded\n');
 

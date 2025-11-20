@@ -1,0 +1,11 @@
+DEPLOYMENT INFO
+================
+Instance ID: i-0b93a84b308dfec21
+Public IP: 18.217.67.150
+Private IP: 172.31.38.132
+Security Group: sg-0c8e7393b1cd59803
+Key Pair: aldeia-staging (at ~/.ssh/aldeia-staging.pem)
+Region: us-east-2
+
+SSH Command:
+ssh -i ~/.ssh/aldeia-staging.pem ubuntu@18.217.67.150
