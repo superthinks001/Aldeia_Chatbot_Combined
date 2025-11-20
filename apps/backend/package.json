@@ -18,7 +18,7 @@
     "migrate": "ts-node src/database/migrate.ts",
     "migrate:create": "node src/database/create-migration.js",
     "migrate:data": "ts-node src/database/migrate-data.ts",
-    "ingest:docs": "cross-env NODE_OPTIONS=--no-deprecation ts-node src/scripts/ingest-documents.ts"
+    "ingest:docs": "cross-env NODE_OPTIONS=--no-deprecation node src/scripts/ingest-documents.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.17.1",
