@@ -6,8 +6,8 @@ import { ChromaClient } from 'chromadb';
 
 // Use the workspace root (two levels up from backend/src)
 const workspaceRoot = path.resolve(__dirname, '../../../');
-const laCountyDir = path.join(workspaceRoot, "chatbot/frontend/public/LA County");
-const pasadenaCountyDir = path.join(workspaceRoot, "chatbot/frontend/public/Pasadena County");
+const laCountyDir = path.join(workspaceRoot, "apps/chatbot-frontend/public/LA County");
+const pasadenaCountyDir = path.join(workspaceRoot, "apps/chatbot-frontend/public/Pasadena County");
 
 export function findAllPDFs(dir: string): string[] {
   let results: string[] = [];
@@ -88,7 +88,7 @@ export async function reindexAllDocuments() {
     }
   }
   // Save sample data to disk
-  fs.writeFileSync(path.join(workspaceRoot, 'embedding_sample.json'), JSON.stringify(sampleData, null, 2));
+  fs.writeFileSync(path.join(__dirname, '../embedding_sample.json'), JSON.stringify(sampleData, null, 2));
   return {
     numFiles: allPDFs.length,
     totalChunks,
