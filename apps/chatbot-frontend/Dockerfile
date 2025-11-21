@@ -1,23 +1,26 @@
 # ============================================
 # Aldeia Chatbot Frontend - Production Dockerfile
 # Multi-stage build for optimized production image
+# Works with npm workspaces monorepo structure
 # ============================================
 
 # Stage 1: Build
 FROM node:18-alpine AS builder
 
-WORKDIR /app
+WORKDIR /workspace
 
-# Copy package files
+# Copy workspace root package files
 COPY package*.json ./
+COPY apps/chatbot-frontend/package*.json ./apps/chatbot-frontend/
 
-# Install dependencies
+# Install all workspace dependencies
 RUN npm ci
 
-# Copy source code
+# Copy all workspace source code
 COPY . .
 
-# Build the application
+# Build frontend application
+WORKDIR /workspace/apps/chatbot-frontend
 RUN npm run build
 
 # ============================================
@@ -28,10 +31,10 @@ FROM nginx:alpine AS production
 RUN apk add --no-cache curl
 
 # Copy custom nginx configuration
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY apps/chatbot-frontend/nginx.conf /etc/nginx/conf.d/default.conf
 
 # Copy built application from builder stage
-COPY --from=builder /app/dist /usr/share/nginx/html
+COPY --from=builder /workspace/apps/chatbot-frontend/dist /usr/share/nginx/html
 
 # Create non-root user
 RUN addgroup -g 1001 -S nginx && adduser -S nginx -u 1001 -G nginx

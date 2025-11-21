@@ -1,23 +1,26 @@
 # ============================================
 # Aldeia Chatbot Backend - Production Dockerfile
 # Multi-stage build for optimized production image
+# Works with npm workspaces monorepo structure
 # ============================================
 
 # Stage 1: Build
 FROM node:18-alpine AS builder
 
-WORKDIR /app
+WORKDIR /workspace
 
-# Copy package files
+# Copy workspace root package files
 COPY package*.json ./
+COPY apps/backend/package*.json ./apps/backend/
 
-# Install all dependencies (including devDependencies for building)
+# Install all workspace dependencies
 RUN npm ci
 
-# Copy source code
+# Copy all workspace source code
 COPY . .
 
-# Build TypeScript
+# Build backend TypeScript
+WORKDIR /workspace/apps/backend
 RUN npm run build
 
 # ============================================
@@ -30,22 +33,25 @@ RUN apk add --no-cache dumb-init curl
 # Create non-root user for security
 RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
 
-WORKDIR /app
+WORKDIR /workspace
 
-# Copy package files
+# Copy workspace root package files
 COPY package*.json ./
+COPY apps/backend/package*.json ./apps/backend/
 
-# Install production dependencies only
+# Install production dependencies for the entire workspace
 RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 
 # Copy built application from builder stage
-COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
+COPY --from=builder --chown=nodejs:nodejs /workspace/apps/backend/dist ./apps/backend/dist
 
 # Create logs directory
-RUN mkdir -p /app/logs && chown nodejs:nodejs /app/logs
+RUN mkdir -p /workspace/apps/backend/logs && chown -R nodejs:nodejs /workspace/apps/backend/logs
 
 # Switch to non-root user
 USER nodejs
+
+WORKDIR /workspace/apps/backend
 
 # Expose port
 EXPOSE 3001
