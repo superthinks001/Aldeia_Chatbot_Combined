@@ -13,6 +13,11 @@ on:
   push:
     branches: [main, develop, integration/*]
 
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
 env:
   NODE_VERSION: '18'
   REGISTRY: ghcr.io

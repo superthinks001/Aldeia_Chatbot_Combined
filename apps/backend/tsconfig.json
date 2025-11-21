@@ -12,7 +12,7 @@
     "moduleResolution": "node"
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules"],
+  "exclude": ["node_modules", "src/database/migrate-data.ts"],
   "ts-node": {
     "compilerOptions": {
       "module": "commonjs"
