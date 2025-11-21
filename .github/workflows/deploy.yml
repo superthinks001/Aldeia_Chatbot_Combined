@@ -73,7 +73,7 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: ./apps/${{ matrix.service }}
+          context: .
           file: ./apps/${{ matrix.service }}/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
@@ -94,7 +94,7 @@ jobs:
     needs: build-and-push
     environment:
       name: ${{ github.event.inputs.environment || 'production' }}
-      url: https://api.aldeia.com
+      url: http://${{ secrets.SERVER_HOST }}:3001
 
     steps:
       - name: Checkout code
@@ -128,9 +128,9 @@ jobs:
           JWT_EXPIRATION=24h
           JWT_REFRESH_EXPIRATION=30d
 
-          BACKEND_URL=https://api.aldeia.com
-          FRONTEND_CHAT_URL=https://chat.aldeia.com
-          FRONTEND_REBUILD_URL=https://rebuild.aldeia.com
+          BACKEND_URL=http://${{ secrets.SERVER_HOST }}:3001
+          FRONTEND_CHAT_URL=http://${{ secrets.SERVER_HOST }}:3000
+          FRONTEND_REBUILD_URL=http://${{ secrets.SERVER_HOST }}:3000
 
           CHROMA_HOST=chromadb
           CHROMA_PORT=8000
@@ -154,7 +154,7 @@ jobs:
           ENABLE_BILLING=true
           USE_SQLITE=false
 
-          CORS_ORIGINS=https://chat.aldeia.com,https://rebuild.aldeia.com,https://aldeia.com
+          CORS_ORIGINS=http://${{ secrets.SERVER_HOST }}:3000,http://${{ secrets.SERVER_HOST }}:3001,http://localhost:3000
 
           RATE_LIMIT_WINDOW=15
           RATE_LIMIT_MAX_REQUESTS=100
@@ -169,10 +169,44 @@ jobs:
           HEALTH_CHECK_TIMEOUT=5000
           EOF
 
+      - name: Install Docker on EC2 (if not already installed)
+        run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
+            # Check if Docker is installed
+            if ! command -v docker &> /dev/null; then
+              echo "Installing Docker..."
+              sudo apt-get update
+              sudo apt-get install -y ca-certificates curl gnupg lsb-release
+              sudo mkdir -p /etc/apt/keyrings
+              curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+              echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+              sudo apt-get update
+              sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+              sudo usermod -aG docker $USER
+              echo "Docker installed successfully"
+            else
+              echo "Docker is already installed"
+            fi
+
+            # Check if Docker Compose is installed
+            if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/null; then
+              echo "Installing Docker Compose..."
+              sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+              sudo chmod +x /usr/local/bin/docker-compose
+              echo "Docker Compose installed successfully"
+            else
+              echo "Docker Compose is already installed"
+            fi
+
+            # Log in to GitHub Container Registry
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          EOF
+
       - name: Copy files to server
         run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "mkdir -p ~/aldeia"
           scp -r docker-compose.production.yml ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:~/aldeia/
-          scp -r nginx ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:~/aldeia/
+          scp -r nginx ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:~/aldeia/ || echo "No nginx directory to copy"
           scp .env.production ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:~/aldeia/.env
 
       - name: Deploy on server
@@ -213,10 +247,10 @@ jobs:
           sleep 10
 
           # Check backend health
-          curl -f https://api.aldeia.com/api/health || exit 1
+          curl -f http://${{ secrets.SERVER_HOST }}:3001/api/health || exit 1
 
           # Check frontend
-          curl -f https://chat.aldeia.com/ || exit 1
+          curl -f http://${{ secrets.SERVER_HOST }}:3000/ || exit 1
 
           echo "✅ Deployment verification successful!"
 
@@ -256,7 +290,7 @@ jobs:
           echo "Running smoke tests..."
 
           # Test backend health
-          response=$(curl -s -o /dev/null -w "%{http_code}" https://api.aldeia.com/api/health)
+          response=$(curl -s -o /dev/null -w "%{http_code}" http://${{ secrets.SERVER_HOST }}:3001/api/health)
           if [ "$response" != "200" ]; then
             echo "❌ Backend health check failed (HTTP $response)"
             exit 1
@@ -264,7 +298,7 @@ jobs:
           echo "✅ Backend health check passed"
 
           # Test frontend
-          response=$(curl -s -o /dev/null -w "%{http_code}" https://chat.aldeia.com/)
+          response=$(curl -s -o /dev/null -w "%{http_code}" http://${{ secrets.SERVER_HOST }}:3000/)
           if [ "$response" != "200" ]; then
             echo "❌ Frontend check failed (HTTP $response)"
             exit 1
@@ -276,7 +310,7 @@ jobs:
       - name: Performance check
         run: |
           echo "Checking API response times..."
-          time curl -s https://api.aldeia.com/api/health > /dev/null
+          time curl -s http://${{ secrets.SERVER_HOST }}:3001/api/health > /dev/null
           echo "✅ Performance check completed"
 
   # ============================================
