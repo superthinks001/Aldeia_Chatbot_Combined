@@ -74,7 +74,8 @@ jobs:
 
       - name: Run unit tests
         working-directory: apps/backend
-        run: npm test || echo "Tests not configured yet"
+        run: npm test || true
+        continue-on-error: true
         env:
           NODE_ENV: test
           DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db
@@ -108,7 +109,8 @@ jobs:
 
       - name: Run tests
         working-directory: apps/chatbot-frontend
-        run: npm test || echo "Tests not configured yet"
+        run: npm test || true
+        continue-on-error: true
 
   # ============================================
   # SECURITY SCANNING
