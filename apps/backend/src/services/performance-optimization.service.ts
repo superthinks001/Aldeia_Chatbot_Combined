@@ -428,10 +428,10 @@ async function logPerformance(data: {
     user_id: log.userId,
     metadata: JSON.stringify(log.metadata),
     cache_hit: log.cacheHit
-  }]).then(() => {
-    // Success
-  }).catch(err => {
-    console.error('Failed to log performance:', err);
+  }]).then((result) => {
+    if (result.error) {
+      console.error('Failed to log performance:', result.error);
+    }
   });
 }
 

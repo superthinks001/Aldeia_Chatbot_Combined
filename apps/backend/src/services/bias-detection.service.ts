@@ -217,7 +217,7 @@ function analyzeDemographicRepresentation(text: string): string[] {
 /**
  * Correct biased text
  */
-function correctBias(text: string, biasTypes: BiasType[]): string {
+export function correctBias(text: string, biasTypes: BiasType[]): string {
   let corrected = text;
 
   // Apply corrections based on detected bias types

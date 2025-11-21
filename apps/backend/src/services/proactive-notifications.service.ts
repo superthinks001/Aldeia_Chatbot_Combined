@@ -78,15 +78,19 @@ export function getProactiveNotifications(context: {
   const now = new Date();
 
   for (const [ruleId, rule] of Object.entries(NOTIFICATION_RULES)) {
+    // Type assertion for proper access to optional location property
+    const ruleLocation = 'location' in rule ? rule.location : undefined;
+    const ruleTopic = 'topic' in rule ? rule.topic : undefined;
+
     // Check location match
-    if (rule.location && context.location) {
-      const locationMatch = context.location.toLowerCase().includes(rule.location.toLowerCase());
+    if (ruleLocation && context.location) {
+      const locationMatch = context.location.toLowerCase().includes(ruleLocation.toLowerCase());
       if (!locationMatch) continue;
     }
 
     // Check topic match
-    if (rule.topic && context.topic) {
-      const topicMatch = context.topic.toLowerCase().includes(rule.topic.toLowerCase());
+    if (ruleTopic && context.topic) {
+      const topicMatch = context.topic.toLowerCase().includes(ruleTopic.toLowerCase());
       if (!topicMatch) continue;
     }
 
@@ -94,7 +98,7 @@ export function getProactiveNotifications(context: {
     notifications.push({
       id: ruleId,
       ...rule.notification,
-      location: rule.location
+      ...(ruleLocation ? { location: ruleLocation } : {})
     });
   }
 

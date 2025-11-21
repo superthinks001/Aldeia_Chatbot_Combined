@@ -1,13 +1,4 @@
 "use strict";
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -49,7 +40,7 @@ const authenticateToken = (req, res, next) => {
     });
 };
 exports.authenticateToken = authenticateToken;
-router.post('/register', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.post('/register', async (req, res) => {
     try {
         const { name, email, password, confirmPassword } = req.body;
         // Validation
@@ -78,7 +69,7 @@ router.post('/register', (req, res) => __awaiter(void 0, void 0, void 0, functio
             });
         }
         // Check if user already exists
-        const existingUser = yield getUserByEmail(email);
+        const existingUser = await getUserByEmail(email);
         if (existingUser) {
             return res.status(409).json({
                 success: false,
@@ -87,10 +78,10 @@ router.post('/register', (req, res) => __awaiter(void 0, void 0, void 0, functio
         }
         // Hash password
         const saltRounds = 12;
-        const hashedPassword = yield bcrypt_1.default.hash(password, saltRounds);
+        const hashedPassword = await bcrypt_1.default.hash(password, saltRounds);
         // Create user
         const userId = utils_1.stringUtils.generateId();
-        const user = yield createUser({
+        const user = await createUser({
             id: userId,
             name: utils_1.stringUtils.sanitize(name),
             email: email.toLowerCase(),
@@ -126,8 +117,8 @@ router.post('/register', (req, res) => __awaiter(void 0, void 0, void 0, functio
             error: 'Registration failed'
         });
     }
-}));
-router.post('/login', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+});
+router.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;
         // Validation
@@ -144,7 +135,7 @@ router.post('/login', (req, res) => __awaiter(void 0, void 0, void 0, function* 
             });
         }
         // Get user from database
-        const user = yield getUserByEmail(email.toLowerCase());
+        const user = await getUserByEmail(email.toLowerCase());
         if (!user) {
             return res.status(401).json({
                 success: false,
@@ -152,7 +143,7 @@ router.post('/login', (req, res) => __awaiter(void 0, void 0, void 0, function* 
             });
         }
         // Verify password
-        const isValidPassword = yield bcrypt_1.default.compare(password, user.password);
+        const isValidPassword = await bcrypt_1.default.compare(password, user.password);
         if (!isValidPassword) {
             return res.status(401).json({
                 success: false,
@@ -166,7 +157,7 @@ router.post('/login', (req, res) => __awaiter(void 0, void 0, void 0, function* 
             role: user.role
         }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
         // Update last login
-        yield updateLastLogin(user.id);
+        await updateLastLogin(user.id);
         logger_1.logger.info(`User logged in: ${user.email}`);
         res.json({
             success: true,
@@ -190,11 +181,11 @@ router.post('/login', (req, res) => __awaiter(void 0, void 0, void 0, function* 
             error: 'Login failed'
         });
     }
-}));
+});
 // ====================================================================
 // GET USER PROFILE (Protected Route)
 // ====================================================================
-router.get('/profile', exports.authenticateToken, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.get('/profile', exports.authenticateToken, async (req, res) => {
     try {
         if (!req.user) {
             return res.status(401).json({
@@ -203,7 +194,7 @@ router.get('/profile', exports.authenticateToken, (req, res) => __awaiter(void 0
             });
         }
         const userId = req.user.userId;
-        const user = yield getUserById(userId);
+        const user = await getUserById(userId);
         if (!user) {
             return res.status(404).json({
                 success: false,
@@ -228,8 +219,8 @@ router.get('/profile', exports.authenticateToken, (req, res) => __awaiter(void 0
             error: 'Failed to get user profile'
         });
     }
-}));
-router.put('/profile', exports.authenticateToken, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+});
+router.put('/profile', exports.authenticateToken, async (req, res) => {
     try {
         if (!req.user) {
             return res.status(401).json({
@@ -239,7 +230,7 @@ router.put('/profile', exports.authenticateToken, (req, res) => __awaiter(void 0
         }
         const userId = req.user.userId;
         const { name, email, currentPassword, newPassword } = req.body;
-        const user = yield getUserById(userId);
+        const user = await getUserById(userId);
         if (!user) {
             return res.status(404).json({
                 success: false,
@@ -260,7 +251,7 @@ router.put('/profile', exports.authenticateToken, (req, res) => __awaiter(void 0
                 });
             }
             // Check if new email is already taken
-            const existingUser = yield getUserByEmail(email.toLowerCase());
+            const existingUser = await getUserByEmail(email.toLowerCase());
             if (existingUser && existingUser.id !== userId) {
                 return res.status(409).json({
                     success: false,
@@ -277,7 +268,7 @@ router.put('/profile', exports.authenticateToken, (req, res) => __awaiter(void 0
                     error: 'Current password required to set new password'
                 });
             }
-            const isValidCurrentPassword = yield bcrypt_1.default.compare(currentPassword, user.password);
+            const isValidCurrentPassword = await bcrypt_1.default.compare(currentPassword, user.password);
             if (!isValidCurrentPassword) {
                 return res.status(401).json({
                     success: false,
@@ -291,7 +282,7 @@ router.put('/profile', exports.authenticateToken, (req, res) => __awaiter(void 0
                 });
             }
             const saltRounds = 12;
-            updates.password = yield bcrypt_1.default.hash(newPassword, saltRounds);
+            updates.password = await bcrypt_1.default.hash(newPassword, saltRounds);
         }
         if (Object.keys(updates).length === 0) {
             return res.status(400).json({
@@ -300,7 +291,7 @@ router.put('/profile', exports.authenticateToken, (req, res) => __awaiter(void 0
             });
         }
         // Update user
-        yield updateUser(userId, updates);
+        await updateUser(userId, updates);
         logger_1.logger.info(`User profile updated: ${user.email}`);
         res.json({
             success: true,
@@ -314,7 +305,7 @@ router.put('/profile', exports.authenticateToken, (req, res) => __awaiter(void 0
             error: 'Failed to update profile'
         });
     }
-}));
+});
 // ====================================================================
 // LOGOUT (Client-side token invalidation)
 // ====================================================================
@@ -329,39 +320,29 @@ router.post('/logout', exports.authenticateToken, (req, res) => {
         message: 'Logged out successfully'
     });
 });
-function createUser(userData) {
-    return __awaiter(this, void 0, void 0, function* () {
-        yield (0, client_1.execute)(`INSERT INTO users (id, name, email, password_hash, role, created_at, updated_at)
+async function createUser(userData) {
+    await (0, client_1.execute)(`INSERT INTO users (id, name, email, password_hash, role, created_at, updated_at)
      VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`, [userData.id, userData.name, userData.email, userData.password, userData.role]);
-        return {
-            id: userData.id,
-            name: userData.name,
-            email: userData.email,
-            role: userData.role,
-            createdAt: new Date()
-        };
-    });
+    return {
+        id: userData.id,
+        name: userData.name,
+        email: userData.email,
+        role: userData.role,
+        createdAt: new Date()
+    };
 }
-function getUserByEmail(email) {
-    return __awaiter(this, void 0, void 0, function* () {
-        return yield (0, client_1.queryOne)('SELECT * FROM users WHERE email = $1', [email]);
-    });
+async function getUserByEmail(email) {
+    return await (0, client_1.queryOne)('SELECT * FROM users WHERE email = $1', [email]);
 }
-function getUserById(id) {
-    return __awaiter(this, void 0, void 0, function* () {
-        return yield (0, client_1.queryOne)('SELECT * FROM users WHERE id = $1', [id]);
-    });
+async function getUserById(id) {
+    return await (0, client_1.queryOne)('SELECT * FROM users WHERE id = $1', [id]);
 }
-function updateUser(id, updates) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const fields = Object.keys(updates).map((key, index) => `${key} = $${index + 1}`).join(', ');
-        const values = [...Object.values(updates), id];
-        yield (0, client_1.execute)(`UPDATE users SET ${fields}, updated_at = CURRENT_TIMESTAMP WHERE id = $${values.length}`, values);
-    });
+async function updateUser(id, updates) {
+    const fields = Object.keys(updates).map((key, index) => `${key} = $${index + 1}`).join(', ');
+    const values = [...Object.values(updates), id];
+    await (0, client_1.execute)(`UPDATE users SET ${fields}, updated_at = CURRENT_TIMESTAMP WHERE id = $${values.length}`, values);
 }
-function updateLastLogin(id) {
-    return __awaiter(this, void 0, void 0, function* () {
-        yield (0, client_1.execute)('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1', [id]);
-    });
+async function updateLastLogin(id) {
+    await (0, client_1.execute)('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1', [id]);
 }
 exports.default = router;

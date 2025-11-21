@@ -17,7 +17,6 @@ const dotenv_1 = __importDefault(require("dotenv"));
 const path_1 = __importDefault(require("path"));
 // Load environment variables
 dotenv_1.default.config({ path: path_1.default.join(__dirname, '../../../.env') });
-dotenv_1.default.config({ path: path_1.default.join(__dirname, '../../../../.env.merge') });
 /**
  * Get database configuration based on environment variables
  */
@@ -75,7 +74,7 @@ function parsePostgresUrl(url) {
  */
 function validateConfig(config) {
     const pg = config.postgres;
-    return !!((pg === null || pg === void 0 ? void 0 : pg.host) && (pg === null || pg === void 0 ? void 0 : pg.port) && (pg === null || pg === void 0 ? void 0 : pg.database) && (pg === null || pg === void 0 ? void 0 : pg.user));
+    return !!(pg?.host && pg?.port && pg?.database && pg?.user);
 }
 /**
  * Get current database type

@@ -1,13 +1,4 @@
 "use strict";
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -30,7 +21,7 @@ const tenant_middleware_1 = require("./middleware/tenant.middleware");
 // Import WebSocket
 const socket_server_1 = require("./websocket/socket.server");
 // Load environment
-dotenv_1.default.config({ path: path_1.default.join(__dirname, '../../.env.merge') });
+dotenv_1.default.config({ path: path_1.default.join(__dirname, '../.env') });
 const app = (0, express_1.default)();
 const PORT = process.env.BACKEND_PORT || 3001;
 // ============================================
@@ -64,15 +55,15 @@ app.use(tenant_middleware_1.tenantMiddleware);
 // ============================================
 // PUBLIC ROUTES (No authentication required)
 // ============================================
-app.get('/api/health', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    const dbConnected = yield (0, database_1.testConnection)();
+app.get('/api/health', async (req, res) => {
+    const dbConnected = await (0, database_1.testConnection)();
     res.json({
         status: dbConnected ? 'healthy' : 'degraded',
         timestamp: new Date().toISOString(),
         database: dbConnected ? 'connected' : 'disconnected',
         version: '2.0.0-auth'
     });
-}));
+});
 // Authentication routes (public)
 app.use('/api/auth', auth_routes_1.default);
 // ============================================
@@ -94,7 +85,11 @@ app.use((req, res) => {
 // Global error handler
 app.use((err, req, res, next) => {
     console.error('Error:', err);
-    res.status(err.status || 500).json(Object.assign({ error: 'Internal server error', message: process.env.NODE_ENV === 'development' ? err.message : 'An error occurred' }, (process.env.NODE_ENV === 'development' && { stack: err.stack })));
+    res.status(err.status || 500).json({
+        error: 'Internal server error',
+        message: process.env.NODE_ENV === 'development' ? err.message : 'An error occurred',
+        ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+    });
 });
 // ============================================
 // START SERVER
@@ -103,12 +98,12 @@ app.use((err, req, res, next) => {
 const httpServer = (0, http_1.createServer)(app);
 // Initialize WebSocket server
 const websocketServer = (0, socket_server_1.initializeWebSocket)(httpServer);
-httpServer.listen(PORT, () => __awaiter(void 0, void 0, void 0, function* () {
+httpServer.listen(PORT, async () => {
     console.log(`\n🚀 Aldeia Chatbot Backend v2.0.0-phase5`);
     console.log(`📡 Server running on port ${PORT}`);
     console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
     // Test database connection
-    const dbConnected = yield (0, database_1.testConnection)();
+    const dbConnected = await (0, database_1.testConnection)();
     if (!dbConnected) {
         console.error('⚠️  WARNING: Database connection failed!');
     }
@@ -123,5 +118,5 @@ httpServer.listen(PORT, () => __awaiter(void 0, void 0, void 0, function* () {
     console.log(`   ✅ Voice Input/Output (Frontend)`);
     console.log(`\n✅ Ready to accept requests`);
     console.log(`   Health check: http://localhost:${PORT}/api/health\n`);
-}));
+});
 exports.default = app;

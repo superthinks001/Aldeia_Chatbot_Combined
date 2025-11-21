@@ -3,15 +3,6 @@
 // EXPRESS API ENDPOINTS FOR CLAUDE-SUPABASE INTEGRATION
 // File: src/routes/ai-database.ts
 // ====================================================================
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -47,7 +38,7 @@ router.use(validateApiKey);
 // ====================================================================
 // 1. EXECUTE RAW SQL (Full Database Control)
 // ====================================================================
-router.post('/execute-sql', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.post('/execute-sql', async (req, res) => {
     try {
         const { query } = req.body;
         if (!query) {
@@ -58,7 +49,7 @@ router.post('/execute-sql', (req, res) => __awaiter(void 0, void 0, void 0, func
         }
         logger_1.logger.info(`Executing SQL: ${query.substring(0, 100)}...`);
         // Execute using RPC function
-        const { data, error } = yield supabase.rpc('exec_sql', {
+        const { data, error } = await supabase.rpc('exec_sql', {
             sql_query: query
         });
         if (error) {
@@ -81,11 +72,11 @@ router.post('/execute-sql', (req, res) => __awaiter(void 0, void 0, void 0, func
             error: 'Internal server error'
         });
     }
-}));
+});
 // ====================================================================
 // 2. QUERY TABLE WITH FILTERS
 // ====================================================================
-router.post('/query-table', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.post('/query-table', async (req, res) => {
     try {
         const { table, select = '*', filters = {}, orderBy, limit, offset = 0 } = req.body;
         if (!table) {
@@ -96,7 +87,7 @@ router.post('/query-table', (req, res) => __awaiter(void 0, void 0, void 0, func
         }
         logger_1.logger.info(`Querying table: ${table}`);
         // Use RPC function for safe querying
-        const { data, error } = yield supabase.rpc('ai_query_table', {
+        const { data, error } = await supabase.rpc('ai_query_table', {
             table_name: table,
             select_columns: select,
             where_conditions: filters,
@@ -124,11 +115,11 @@ router.post('/query-table', (req, res) => __awaiter(void 0, void 0, void 0, func
             error: 'Internal server error'
         });
     }
-}));
+});
 // ====================================================================
 // 3. INSERT DATA INTO ANY TABLE
 // ====================================================================
-router.post('/insert', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.post('/insert', async (req, res) => {
     try {
         const { table, data } = req.body;
         if (!table || !data) {
@@ -142,7 +133,7 @@ router.post('/insert', (req, res) => __awaiter(void 0, void 0, void 0, function*
         const insertData = Array.isArray(data) ? data : [data];
         const results = [];
         for (const item of insertData) {
-            const { data: result, error } = yield supabase.rpc('ai_insert_data', {
+            const { data: result, error } = await supabase.rpc('ai_insert_data', {
                 table_name: table,
                 data_json: item
             });
@@ -168,11 +159,11 @@ router.post('/insert', (req, res) => __awaiter(void 0, void 0, void 0, function*
             error: 'Internal server error'
         });
     }
-}));
+});
 // ====================================================================
 // 4. UPDATE DATA IN ANY TABLE
 // ====================================================================
-router.put('/update', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.put('/update', async (req, res) => {
     try {
         const { table, data, filters } = req.body;
         if (!table || !data) {
@@ -190,7 +181,7 @@ router.put('/update', (req, res) => __awaiter(void 0, void 0, void 0, function* 
                 query = query.eq(key, value);
             });
         }
-        const { data: result, error } = yield query.select();
+        const { data: result, error } = await query.select();
         if (error) {
             logger_1.logger.error('Update error:', error);
             return res.status(400).json({
@@ -201,7 +192,7 @@ router.put('/update', (req, res) => __awaiter(void 0, void 0, void 0, function* 
         res.json({
             success: true,
             data: result,
-            message: `Updated ${(result === null || result === void 0 ? void 0 : result.length) || 0} record(s) successfully`
+            message: `Updated ${result?.length || 0} record(s) successfully`
         });
     }
     catch (error) {
@@ -211,11 +202,11 @@ router.put('/update', (req, res) => __awaiter(void 0, void 0, void 0, function* 
             error: 'Internal server error'
         });
     }
-}));
+});
 // ====================================================================
 // 5. DELETE DATA FROM ANY TABLE
 // ====================================================================
-router.delete('/delete', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.delete('/delete', async (req, res) => {
     try {
         const { table, filters } = req.body;
         if (!table) {
@@ -237,7 +228,7 @@ router.delete('/delete', (req, res) => __awaiter(void 0, void 0, void 0, functio
         Object.entries(filters).forEach(([key, value]) => {
             query = query.eq(key, value);
         });
-        const { data: result, error } = yield query.select();
+        const { data: result, error } = await query.select();
         if (error) {
             logger_1.logger.error('Delete error:', error);
             return res.status(400).json({
@@ -248,7 +239,7 @@ router.delete('/delete', (req, res) => __awaiter(void 0, void 0, void 0, functio
         res.json({
             success: true,
             data: result,
-            message: `Deleted ${(result === null || result === void 0 ? void 0 : result.length) || 0} record(s) successfully`
+            message: `Deleted ${result?.length || 0} record(s) successfully`
         });
     }
     catch (error) {
@@ -258,15 +249,15 @@ router.delete('/delete', (req, res) => __awaiter(void 0, void 0, void 0, functio
             error: 'Internal server error'
         });
     }
-}));
+});
 // ====================================================================
 // 6. GET TABLE SCHEMA INFORMATION
 // ====================================================================
-router.get('/table-info/:tableName?', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.get('/table-info/:tableName?', async (req, res) => {
     try {
         const { tableName } = req.params;
         logger_1.logger.info(`Getting table info: ${tableName || 'all tables'}`);
-        const { data, error } = yield supabase.rpc('ai_get_table_info', {
+        const { data, error } = await supabase.rpc('ai_get_table_info', {
             table_name: tableName || null
         });
         if (error) {
@@ -288,11 +279,11 @@ router.get('/table-info/:tableName?', (req, res) => __awaiter(void 0, void 0, vo
             error: 'Internal server error'
         });
     }
-}));
+});
 // ====================================================================
 // 7. CREATE NEW TABLE
 // ====================================================================
-router.post('/create-table', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.post('/create-table', async (req, res) => {
     try {
         const { tableName, columns, indexes } = req.body;
         if (!tableName || !columns) {
@@ -302,7 +293,7 @@ router.post('/create-table', (req, res) => __awaiter(void 0, void 0, void 0, fun
             });
         }
         logger_1.logger.info(`Creating table: ${tableName}`);
-        const { data, error } = yield supabase.rpc('ai_create_table', {
+        const { data, error } = await supabase.rpc('ai_create_table', {
             table_name: tableName,
             table_definition: {
                 columns: columns,
@@ -329,14 +320,14 @@ router.post('/create-table', (req, res) => __awaiter(void 0, void 0, void 0, fun
             error: 'Internal server error'
         });
     }
-}));
+});
 // ====================================================================
 // 8. GET DATABASE ANALYTICS
 // ====================================================================
-router.get('/analytics', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.get('/analytics', async (req, res) => {
     try {
         logger_1.logger.info('Getting database analytics');
-        const { data, error } = yield supabase.rpc('ai_get_database_analytics');
+        const { data, error } = await supabase.rpc('ai_get_database_analytics');
         if (error) {
             logger_1.logger.error('Analytics error:', error);
             return res.status(400).json({
@@ -356,11 +347,11 @@ router.get('/analytics', (req, res) => __awaiter(void 0, void 0, void 0, functio
             error: 'Internal server error'
         });
     }
-}));
+});
 // ====================================================================
 // 9. BATCH OPERATIONS
 // ====================================================================
-router.post('/batch', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.post('/batch', async (req, res) => {
     try {
         const { operations } = req.body;
         if (!operations || !Array.isArray(operations)) {
@@ -376,25 +367,25 @@ router.post('/batch', (req, res) => __awaiter(void 0, void 0, void 0, function* 
                 let result;
                 switch (op.type) {
                     case 'insert':
-                        result = yield supabase.rpc('ai_insert_data', {
+                        result = await supabase.rpc('ai_insert_data', {
                             table_name: op.table,
                             data_json: op.data
                         });
                         break;
                     case 'update':
-                        result = yield supabase.from(op.table)
+                        result = await supabase.from(op.table)
                             .update(op.data)
                             .match(op.filters)
                             .select();
                         break;
                     case 'delete':
-                        result = yield supabase.from(op.table)
+                        result = await supabase.from(op.table)
                             .delete()
                             .match(op.filters)
                             .select();
                         break;
                     case 'query':
-                        result = yield supabase.rpc('ai_query_table', {
+                        result = await supabase.rpc('ai_query_table', {
                             table_name: op.table,
                             select_columns: op.select || '*',
                             where_conditions: op.filters || {},
@@ -438,14 +429,14 @@ router.post('/batch', (req, res) => __awaiter(void 0, void 0, void 0, function* 
             error: 'Internal server error'
         });
     }
-}));
+});
 // ====================================================================
 // 10. HEALTH CHECK
 // ====================================================================
-router.get('/health', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.get('/health', async (req, res) => {
     try {
         // Test database connection
-        const { data, error } = yield supabase
+        const { data, error } = await supabase
             .from('users')
             .select('count')
             .limit(1);
@@ -468,7 +459,7 @@ router.get('/health', (req, res) => __awaiter(void 0, void 0, void 0, function* 
             error: error instanceof Error ? error.message : String(error)
         });
     }
-}));
+});
 exports.default = router;
 // ====================================================================
 // INTEGRATION IN MAIN APP (app.ts or index.ts)

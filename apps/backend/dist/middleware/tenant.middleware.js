@@ -1,13 +1,4 @@
 "use strict";
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.validateTenantAccess = exports.applyTenantFilter = exports.getTenantId = exports.requireTenant = exports.tenantMiddleware = void 0;
 const database_1 = require("../config/database");
@@ -18,13 +9,13 @@ const logger_1 = require("../utils/logger");
  * 1. API Key authentication (X-API-Key header)
  * 2. User-based tenant (via authenticated user's organization)
  */
-const tenantMiddleware = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+const tenantMiddleware = async (req, res, next) => {
     try {
         // Check for API key in header
         const apiKey = req.headers['x-api-key'];
         if (apiKey) {
             // API key based tenant lookup
-            const { data: tenant, error } = yield database_1.supabase
+            const { data: tenant, error } = await database_1.supabase
                 .from('tenants')
                 .select('*')
                 .eq('api_key', apiKey)
@@ -44,7 +35,7 @@ const tenantMiddleware = (req, res, next) => __awaiter(void 0, void 0, void 0, f
         if (req.user) {
             const userId = parseInt(req.user.userId);
             // Get user's organization
-            const { data: membership, error } = yield database_1.supabase
+            const { data: membership, error } = await database_1.supabase
                 .from('organization_members')
                 .select(`
           organization_id,
@@ -78,7 +69,7 @@ const tenantMiddleware = (req, res, next) => __awaiter(void 0, void 0, void 0, f
         logger_1.logger.error('Tenant middleware error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
-});
+};
 exports.tenantMiddleware = tenantMiddleware;
 /**
  * Require tenant middleware - ensures request has valid tenant
@@ -117,14 +108,14 @@ exports.applyTenantFilter = applyTenantFilter;
 /**
  * Validate tenant access to resource
  */
-const validateTenantAccess = (req, table, resourceId) => __awaiter(void 0, void 0, void 0, function* () {
+const validateTenantAccess = async (req, table, resourceId) => {
     const tenantId = (0, exports.getTenantId)(req);
     if (!tenantId) {
         // No tenant restriction
         return true;
     }
     try {
-        const { data, error } = yield database_1.supabase
+        const { data, error } = await database_1.supabase
             .from(table)
             .select('organization_id')
             .eq('id', resourceId)
@@ -138,7 +129,7 @@ const validateTenantAccess = (req, table, resourceId) => __awaiter(void 0, void 
         logger_1.logger.error('Error validating tenant access:', error);
         return false;
     }
-});
+};
 exports.validateTenantAccess = validateTenantAccess;
 exports.default = {
     tenantMiddleware: exports.tenantMiddleware,

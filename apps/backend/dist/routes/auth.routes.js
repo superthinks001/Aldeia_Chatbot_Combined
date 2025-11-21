@@ -1,13 +1,4 @@
 "use strict";
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -17,7 +8,7 @@ const auth_service_1 = require("../services/auth/auth.service");
 const auth_1 = require("../middleware/auth");
 const logger_1 = require("../utils/logger");
 const router = express_1.default.Router();
-router.post('/register', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.post('/register', async (req, res) => {
     try {
         const { email, password, name, county } = req.body;
         // Validation
@@ -43,14 +34,14 @@ router.post('/register', (req, res) => __awaiter(void 0, void 0, void 0, functio
             });
         }
         // Register user
-        const user = yield auth_service_1.AuthService.registerUser(email, password, name, county);
+        const user = await auth_service_1.AuthService.registerUser(email, password, name, county);
         // Generate tokens for auto-login after registration
         const tokens = {
             accessToken: auth_service_1.AuthService.generateAccessToken(user),
             refreshToken: auth_service_1.AuthService.generateRefreshToken(user)
         };
         // Store refresh token
-        yield auth_service_1.AuthService.storeRefreshToken(user.id, tokens.refreshToken, req.ip, req.headers['user-agent']);
+        await auth_service_1.AuthService.storeRefreshToken(user.id, tokens.refreshToken, req.ip, req.headers['user-agent']);
         logger_1.logger.info(`New user registered: ${user.email}`);
         res.status(201).json({
             success: true,
@@ -75,8 +66,8 @@ router.post('/register', (req, res) => __awaiter(void 0, void 0, void 0, functio
             error: 'Registration failed'
         });
     }
-}));
-router.post('/login', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+});
+router.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;
         // Validation
@@ -87,7 +78,7 @@ router.post('/login', (req, res) => __awaiter(void 0, void 0, void 0, function* 
             });
         }
         // Authenticate user
-        const result = yield auth_service_1.AuthService.authenticateUser(email, password);
+        const result = await auth_service_1.AuthService.authenticateUser(email, password);
         if (!result) {
             return res.status(401).json({
                 success: false,
@@ -115,8 +106,8 @@ router.post('/login', (req, res) => __awaiter(void 0, void 0, void 0, function* 
             error: 'Login failed'
         });
     }
-}));
-router.post('/refresh', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+});
+router.post('/refresh', async (req, res) => {
     try {
         const { refreshToken } = req.body;
         if (!refreshToken) {
@@ -125,7 +116,7 @@ router.post('/refresh', (req, res) => __awaiter(void 0, void 0, void 0, function
                 error: 'Refresh token is required'
             });
         }
-        const result = yield auth_service_1.AuthService.refreshAccessToken(refreshToken);
+        const result = await auth_service_1.AuthService.refreshAccessToken(refreshToken);
         if (!result) {
             return res.status(401).json({
                 success: false,
@@ -146,11 +137,11 @@ router.post('/refresh', (req, res) => __awaiter(void 0, void 0, void 0, function
             error: 'Failed to refresh token'
         });
     }
-}));
+});
 // ====================================================================
 // GET USER PROFILE (Protected)
 // ====================================================================
-router.get('/profile', auth_1.authenticate, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.get('/profile', auth_1.authenticate, async (req, res) => {
     try {
         if (!req.user) {
             return res.status(401).json({
@@ -174,8 +165,8 @@ router.get('/profile', auth_1.authenticate, (req, res) => __awaiter(void 0, void
             error: 'Failed to get user profile'
         });
     }
-}));
-router.post('/change-password', auth_1.authenticate, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+});
+router.post('/change-password', auth_1.authenticate, async (req, res) => {
     try {
         if (!req.user) {
             return res.status(401).json({
@@ -198,7 +189,7 @@ router.post('/change-password', auth_1.authenticate, (req, res) => __awaiter(voi
             });
         }
         // Change password
-        const success = yield auth_service_1.AuthService.changePassword(req.user.userId, currentPassword, newPassword);
+        const success = await auth_service_1.AuthService.changePassword(req.user.userId, currentPassword, newPassword);
         if (!success) {
             return res.status(401).json({
                 success: false,
@@ -218,12 +209,12 @@ router.post('/change-password', auth_1.authenticate, (req, res) => __awaiter(voi
             error: 'Failed to change password'
         });
     }
-}));
-router.post('/logout', auth_1.authenticate, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+});
+router.post('/logout', auth_1.authenticate, async (req, res) => {
     try {
         const { refreshToken } = req.body;
         if (refreshToken) {
-            yield auth_service_1.AuthService.logout(refreshToken);
+            await auth_service_1.AuthService.logout(refreshToken);
         }
         if (req.user) {
             logger_1.logger.info(`User logged out: ${req.user.email}`);
@@ -240,11 +231,11 @@ router.post('/logout', auth_1.authenticate, (req, res) => __awaiter(void 0, void
             error: 'Failed to logout'
         });
     }
-}));
+});
 // ====================================================================
 // LOGOUT ALL SESSIONS (Protected)
 // ====================================================================
-router.post('/logout-all', auth_1.authenticate, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.post('/logout-all', auth_1.authenticate, async (req, res) => {
     try {
         if (!req.user) {
             return res.status(401).json({
@@ -252,7 +243,7 @@ router.post('/logout-all', auth_1.authenticate, (req, res) => __awaiter(void 0, 
                 error: 'Authentication required'
             });
         }
-        yield auth_service_1.AuthService.logoutAllSessions(req.user.userId);
+        await auth_service_1.AuthService.logoutAllSessions(req.user.userId);
         logger_1.logger.info(`All sessions logged out for user: ${req.user.email}`);
         res.json({
             success: true,
@@ -266,11 +257,11 @@ router.post('/logout-all', auth_1.authenticate, (req, res) => __awaiter(void 0, 
             error: 'Failed to logout from all sessions'
         });
     }
-}));
+});
 // ====================================================================
 // VERIFY TOKEN (Utility endpoint for clients)
 // ====================================================================
-router.get('/verify', auth_1.authenticate, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.get('/verify', auth_1.authenticate, async (req, res) => {
     try {
         // If middleware passes, token is valid
         res.json({
@@ -288,5 +279,5 @@ router.get('/verify', auth_1.authenticate, (req, res) => __awaiter(void 0, void 
             error: 'Failed to verify token'
         });
     }
-}));
+});
 exports.default = router;

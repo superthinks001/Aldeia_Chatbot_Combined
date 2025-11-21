@@ -32,15 +32,6 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -51,7 +42,7 @@ const supabase_js_1 = require("@supabase/supabase-js");
 const dotenv = __importStar(require("dotenv"));
 const path_1 = __importDefault(require("path"));
 // Load environment variables
-dotenv.config({ path: path_1.default.join(__dirname, '../../../../.env.merge') });
+dotenv.config({ path: path_1.default.join(__dirname, '../../.env') });
 // ============================================
 // PostgreSQL/Supabase Connection
 // ============================================
@@ -69,25 +60,23 @@ exports.supabase = (0, supabase_js_1.createClient)(supabaseUrl, supabaseServiceK
 // ============================================
 // Database Helper Functions
 // ============================================
-function testConnection() {
-    return __awaiter(this, void 0, void 0, function* () {
-        try {
-            const { data, error } = yield exports.supabase
-                .from('users')
-                .select('count')
-                .limit(1);
-            if (error) {
-                console.error('❌ Database connection failed:', error.message);
-                return false;
-            }
-            console.log('✅ PostgreSQL/Supabase connection successful');
-            return true;
-        }
-        catch (error) {
-            console.error('❌ Database connection error:', error);
+async function testConnection() {
+    try {
+        const { data, error } = await exports.supabase
+            .from('users')
+            .select('count')
+            .limit(1);
+        if (error) {
+            console.error('❌ Database connection failed:', error.message);
             return false;
         }
-    });
+        console.log('✅ PostgreSQL/Supabase connection successful');
+        return true;
+    }
+    catch (error) {
+        console.error('❌ Database connection error:', error);
+        return false;
+    }
 }
 // Log database mode on import
 console.log('📊 Database Mode: PostgreSQL/Supabase');

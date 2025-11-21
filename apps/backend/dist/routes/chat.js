@@ -1,19 +1,42 @@
 "use strict";
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
-const transformers_1 = require("@xenova/transformers");
 const chromadb_1 = require("chromadb");
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
@@ -37,42 +60,47 @@ let collection = null;
 // Path for bias/fairness log file
 const biasLogPath = path_1.default.join(__dirname, '../../bias_fairness.log');
 // Initialize MiniLM and ChromaDB once
-(() => __awaiter(void 0, void 0, void 0, function* () {
+(async () => {
     try {
-        embedder = yield (0, transformers_1.pipeline)('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
+        // Dynamically import @xenova/transformers to handle ES module
+        const { pipeline } = await Promise.resolve().then(() => __importStar(require('@xenova/transformers')));
+        embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
         const chromaClient = new chromadb_1.ChromaClient();
-        collection = yield chromaClient.getOrCreateCollection({
+        collection = await chromaClient.getOrCreateCollection({
             name: 'fire_recovery_chunks',
             metadata: { description: 'Paragraph chunks from LA/Pasadena County fire recovery PDFs' },
             embeddingFunction: {
-                generate: (_docs) => __awaiter(void 0, void 0, void 0, function* () { throw new Error('embeddingFunction should not be called'); })
+                generate: async (_docs) => { throw new Error('embeddingFunction should not be called'); }
             }
         });
         console.log('ChromaDB initialized successfully');
     }
     catch (error) {
         console.warn('ChromaDB initialization failed, continuing without vector search:', error instanceof Error ? error.message : String(error));
-        // Set embedder without ChromaDB for basic functionality
-        embedder = yield (0, transformers_1.pipeline)('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
-    }
-}))();
-// Ensure embedder is initialized before handling requests
-function ensureInitialized() {
-    return __awaiter(this, void 0, void 0, function* () {
-        if (!embedder) {
-            // Wait for initialization (max 5 seconds)
-            for (let i = 0; i < 10; i++) {
-                if (embedder)
-                    return;
-                yield new Promise(r => setTimeout(r, 500));
-            }
+        try {
+            // Set embedder without ChromaDB for basic functionality
+            const { pipeline } = await Promise.resolve().then(() => __importStar(require('@xenova/transformers')));
+            embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
         }
-    });
+        catch (embedError) {
+            console.error('Failed to initialize embedder:', embedError);
+        }
+    }
+})();
+// Ensure embedder is initialized before handling requests
+async function ensureInitialized() {
+    if (!embedder) {
+        // Wait for initialization (max 5 seconds)
+        for (let i = 0; i < 10; i++) {
+            if (embedder)
+                return;
+            await new Promise(r => setTimeout(r, 500));
+        }
+    }
 }
 function logErrorToFile(error, req) {
-    var _a;
     const logPath = path_1.default.join(__dirname, '../../error.log');
-    const userId = ((_a = req.user) === null || _a === void 0 ? void 0 : _a.userId) || 'anonymous';
+    const userId = req.user?.userId || 'anonymous';
     const logEntry = `\n[${new Date().toISOString()}]\nUser: ${userId}\nRequest: ${JSON.stringify({ url: req.url, body: req.body })}\nError: ${error instanceof Error ? error.stack : JSON.stringify(error)}\n`;
     fs_1.default.appendFileSync(logPath, logEntry);
 }
@@ -180,8 +208,7 @@ function getProactiveNotification(message, context) {
     }
     return null;
 }
-router.post('/', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c;
+router.post('/', async (req, res) => {
     // Get authenticated user info
     const userId = parseInt(req.user.userId); // Convert string to number
     const userEmail = req.user.email;
@@ -195,8 +222,8 @@ router.post('/', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     // Create or get conversation from database
     let conversation = null;
     if (!isFirstMessage) {
-        conversation = yield conversations_service_1.ConversationsService.createOrGetConversation(userId, conversationId || undefined, undefined, // title - auto-generated later
-        (userProfile === null || userProfile === void 0 ? void 0 : userProfile.language) || 'en');
+        conversation = await conversations_service_1.ConversationsService.createOrGetConversation(userId, conversationId || undefined, undefined, // title - auto-generated later
+        userProfile?.language || 'en');
         // Update conversationId if new conversation was created
         if (conversation && !conversationId) {
             conversationId = conversation.id;
@@ -210,7 +237,7 @@ router.post('/', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         convContext.lastUserMessage = message;
     // Store user profile if provided
     if (userProfile) {
-        convContext.userProfile = Object.assign(Object.assign({}, convContext.userProfile), userProfile);
+        convContext.userProfile = { ...convContext.userProfile, ...userProfile };
     }
     // Add to history
     if (!convContext.history)
@@ -248,8 +275,8 @@ router.post('/', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     }
     // Sprint 2: Enhanced NLP intent classification
     const intentResult = (0, nlp_service_1.classifyIntent)(message, {
-        location: context === null || context === void 0 ? void 0 : context.location,
-        topic: context === null || context === void 0 ? void 0 : context.topic,
+        location: context?.location,
+        topic: context?.topic,
         pageContext: convContext.pageContext,
         conversationHistory: convContext.history
     });
@@ -267,7 +294,7 @@ router.post('/', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         }
     }
     try {
-        yield ensureInitialized();
+        await ensureInitialized();
         if (!embedder) {
             return res.status(503).json({ response: 'I apologize, but my knowledge base is still loading. Please try again in a moment.', confidence: 0, bias, uncertainty: true, context: context || null });
         }
@@ -284,13 +311,13 @@ router.post('/', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
                 conversationContexts[conversationId] = convContext;
             // Store user message and bot clarification in database
             if (conversation && conversationId) {
-                yield conversations_service_1.ConversationsService.addMessage(conversationId, 'user', message, {
+                await conversations_service_1.ConversationsService.addMessage(conversationId, 'user', message, {
                     intent,
                     ambiguous: true,
                     intentConfidence: intentResult.confidence,
                     entities
                 });
-                yield conversations_service_1.ConversationsService.addMessage(conversationId, 'bot', clarificationText, {
+                await conversations_service_1.ConversationsService.addMessage(conversationId, 'bot', clarificationText, {
                     intent,
                     ambiguous: true,
                     confidence: 0.3
@@ -325,29 +352,26 @@ router.post('/', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         else {
             contextText = message;
         }
-        const embeddingTensor = yield embedder(contextText, { pooling: 'mean', normalize: true });
+        const embeddingTensor = await embedder(contextText, { pooling: 'mean', normalize: true });
         const embedding = Array.from(embeddingTensor.data);
         let matches = [];
         if (collection) {
             // Query ChromaDB for top 3 most similar chunks
-            const results = yield collection.query({
+            const results = await collection.query({
                 queryEmbeddings: [embedding],
                 nResults: 3
             });
             // Log top 3 matches for debugging
             for (let i = 0; i < Math.min(3, results.documents[0].length); i++) {
                 const m = results.documents[0][i];
-                console.log(`Match ${i + 1}:`, m.slice(0, 100), '| Source:', (_a = results.metadatas[0][i]) === null || _a === void 0 ? void 0 : _a.source, '| Distance:', results.distances[0][i]);
+                console.log(`Match ${i + 1}:`, m.slice(0, 100), '| Source:', results.metadatas[0][i]?.source, '| Distance:', results.distances[0][i]);
             }
-            matches = (results.documents[0] || []).map((text, i) => {
-                var _a, _b;
-                return ({
-                    text,
-                    source: (_a = results.metadatas[0][i]) === null || _a === void 0 ? void 0 : _a.source,
-                    chunk_index: (_b = results.metadatas[0][i]) === null || _b === void 0 ? void 0 : _b.chunk_index,
-                    distance: results.distances[0][i]
-                });
-            });
+            matches = (results.documents[0] || []).map((text, i) => ({
+                text,
+                source: results.metadatas[0][i]?.source,
+                chunk_index: results.metadatas[0][i]?.chunk_index,
+                distance: results.distances[0][i]
+            }));
         }
         else {
             console.log('ChromaDB not available, providing general response');
@@ -366,7 +390,7 @@ router.post('/', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             });
         }
         // Calculate confidence: 1 - (distance / 2.0), clamp 0-1
-        const confidence = Math.max(0, Math.min(1, 1 - ((_b = matches[0].distance) !== null && _b !== void 0 ? _b : 2) / 2));
+        const confidence = Math.max(0, Math.min(1, 1 - (matches[0].distance ?? 2) / 2));
         // Improved keyword matching: all query words must be present
         const queryWords = message.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
         let keywordMatch = matches.find((m) => queryWords.every((qw) => m.text.toLowerCase().includes(qw)));
@@ -382,8 +406,8 @@ router.post('/', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         }
         // Sprint 2: Fact-checking the AI response
         const factCheckResult = (0, fact_checking_service_1.factCheck)(answer, {
-            location: entities.location || (context === null || context === void 0 ? void 0 : context.location),
-            topic: entities.topic || (context === null || context === void 0 ? void 0 : context.topic),
+            location: entities.location || context?.location,
+            topic: entities.topic || context?.topic,
             intent
         });
         // Sprint 2: Apply bias correction if needed and bias score is high
@@ -432,9 +456,9 @@ router.post('/', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         }
         // Sprint 2: Enhanced proactive notifications
         const notifications = (0, proactive_notifications_service_1.getProactiveNotifications)({
-            location: entities.location || (context === null || context === void 0 ? void 0 : context.location),
-            topic: entities.topic || (context === null || context === void 0 ? void 0 : context.topic),
-            userHistory: ((_c = convContext.history) === null || _c === void 0 ? void 0 : _c.map((h) => h.text)) || []
+            location: entities.location || context?.location,
+            topic: entities.topic || context?.topic,
+            userHistory: convContext.history?.map((h) => h.text) || []
         });
         const notification = notifications.length > 0 ? notifications[0] : null;
         // Sprint 3: Interest-based suggestions
@@ -458,7 +482,7 @@ router.post('/', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         let handoffContact = null;
         if (handoffRequired) {
             handoffMessage = (0, human_handoff_service_1.getHandoffMessage)(handoffTrigger);
-            handoffContact = (0, human_handoff_service_1.getHandoffContact)(handoffTrigger, entities.location || (context === null || context === void 0 ? void 0 : context.location));
+            handoffContact = (0, human_handoff_service_1.getHandoffContact)(handoffTrigger, entities.location || context?.location);
             console.log('Human handoff triggered:', {
                 reason: handoffTrigger.reason,
                 priority: handoffTrigger.priority,
@@ -466,7 +490,7 @@ router.post('/', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             });
         }
         // Log user message event with Sprint 2 enhanced metadata
-        yield analytics_service_1.AnalyticsService.logEvent({
+        await analytics_service_1.AnalyticsService.logEvent({
             user_id: userId,
             conversation_id: conversationId || undefined,
             event_type: 'user_message',
@@ -484,7 +508,7 @@ router.post('/', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         });
         // Store user message in conversation history with Sprint 2 metadata
         if (conversation && conversationId) {
-            yield conversations_service_1.ConversationsService.addMessage(conversationId, 'user', message, {
+            await conversations_service_1.ConversationsService.addMessage(conversationId, 'user', message, {
                 intent,
                 intentConfidence: intentResult.confidence,
                 secondaryIntents: intentResult.secondaryIntents,
@@ -498,7 +522,7 @@ router.post('/', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         // Use enhanced response formatting
         const replyFormatted = formatResponse(reply, selected.source, bias);
         // Log bot response event with Sprint 2 metadata
-        yield analytics_service_1.AnalyticsService.logEvent({
+        await analytics_service_1.AnalyticsService.logEvent({
             user_id: userId,
             conversation_id: conversationId || undefined,
             event_type: 'bot_response',
@@ -520,7 +544,7 @@ router.post('/', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         });
         // Store bot response in conversation history with Sprint 2 metadata
         if (conversation && conversationId) {
-            yield conversations_service_1.ConversationsService.addMessage(conversationId, 'bot', replyFormatted, {
+            await conversations_service_1.ConversationsService.addMessage(conversationId, 'bot', replyFormatted, {
                 intent,
                 confidence,
                 bias,
@@ -533,7 +557,7 @@ router.post('/', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         }
         // Log handoff event if needed with enhanced metadata
         if (handoffRequired) {
-            yield analytics_service_1.AnalyticsService.logEvent({
+            await analytics_service_1.AnalyticsService.logEvent({
                 user_id: userId,
                 conversation_id: conversationId || undefined,
                 event_type: 'handoff',
@@ -546,8 +570,10 @@ router.post('/', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
                 }
             });
         }
-        res.json(Object.assign(Object.assign(Object.assign(Object.assign(Object.assign({ response: replyFormatted, confidence,
-            bias, 
+        res.json({
+            response: replyFormatted,
+            confidence,
+            bias,
             // Sprint 2: Enhanced bias analysis
             biasAnalysis: {
                 detected: biasAnalysis.detected,
@@ -555,29 +581,52 @@ router.post('/', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
                 types: biasAnalysis.biasTypes,
                 severity: biasAnalysis.biasScore > 0.7 ? 'high' : biasAnalysis.biasScore > 0.4 ? 'medium' : 'low',
                 corrected: biasAnalysis.correctedText !== undefined
-            }, uncertainty: confidence < 0.4 || factCheckResult.reliability === 'low' || factCheckResult.reliability === 'unverified', context: convContext, grounded: factCheckResult.verified, 
+            },
+            uncertainty: confidence < 0.4 || factCheckResult.reliability === 'low' || factCheckResult.reliability === 'unverified',
+            context: convContext,
+            grounded: factCheckResult.verified,
             // Sprint 2: Fact-checking results
-            hallucination: factCheckResult.hallucinationRisk > 0.6, hallucinationRisk: factCheckResult.hallucinationRisk, factCheck: {
+            hallucination: factCheckResult.hallucinationRisk > 0.6,
+            hallucinationRisk: factCheckResult.hallucinationRisk,
+            factCheck: {
                 verified: factCheckResult.verified,
                 reliability: factCheckResult.reliability,
                 sources: factCheckResult.sources.map(s => s.name),
                 conflicts: factCheckResult.conflicts.length > 0 ? factCheckResult.conflicts : undefined,
                 recommendations: factCheckResult.recommendations
-            }, source: selected.source, chunk_index: selected.chunk_index, distance: selected.distance, matches: matches.map((m) => ({
+            },
+            source: selected.source,
+            chunk_index: selected.chunk_index,
+            distance: selected.distance,
+            matches: matches.map((m) => ({
                 text: m.text,
                 source: m.source,
                 chunk_index: m.chunk_index,
                 score: m.distance
-            })), 
+            })),
             // Sprint 2: Enhanced intent classification
-            intent, intentConfidence: intentResult.confidence, secondaryIntents: intentResult.secondaryIntents, entities, ambiguous: false, history: convContext.history }, (alternatives.length > 0 ? { alternatives } : {})), (notification ? { notification } : {})), (notifications.length > 1 ? { notifications } : {})), (suggestions.length > 0 ? { suggestions } : {})), (handoffRequired ? {
-            handoffRequired,
-            handoffReason: handoffTrigger.reason,
-            handoffPriority: handoffTrigger.priority,
-            handoffMessage,
-            handoffContact,
-            handoffExpert: handoffTrigger.suggestedExpert
-        } : {})));
+            intent,
+            intentConfidence: intentResult.confidence,
+            secondaryIntents: intentResult.secondaryIntents,
+            entities,
+            ambiguous: false,
+            history: convContext.history,
+            ...(alternatives.length > 0 ? { alternatives } : {}),
+            // Sprint 2: Enhanced proactive notifications
+            ...(notification ? { notification } : {}),
+            ...(notifications.length > 1 ? { notifications } : {}),
+            // Sprint 3: Interest-based suggestions
+            ...(suggestions.length > 0 ? { suggestions } : {}),
+            // Sprint 2: Enhanced human handoff
+            ...(handoffRequired ? {
+                handoffRequired,
+                handoffReason: handoffTrigger.reason,
+                handoffPriority: handoffTrigger.priority,
+                handoffMessage,
+                handoffContact,
+                handoffExpert: handoffTrigger.suggestedExpert
+            } : {})
+        });
     }
     catch (err) {
         console.error('Chat endpoint error:', err);
@@ -585,8 +634,8 @@ router.post('/', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         const errorMessage = err instanceof Error ? err.message : String(err);
         res.status(500).json({ response: 'I apologize, but something went wrong on my end. Please try again, and if the problem persists, you may want to contact support directly.' });
     }
-}));
-router.post('/search', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+});
+router.post('/search', async (req, res) => {
     let { query } = req.body;
     // Sanitize input
     query = typeof query === 'string' ? sanitizeInput(query) : '';
@@ -601,23 +650,20 @@ router.post('/search', (req, res) => __awaiter(void 0, void 0, void 0, function*
             return res.status(503).json({ error: 'ChromaDB not available - vector search disabled' });
         }
         // Generate embedding for the query
-        const embeddingTensor = yield embedder(query, { pooling: 'mean', normalize: true });
+        const embeddingTensor = await embedder(query, { pooling: 'mean', normalize: true });
         const embedding = Array.from(embeddingTensor.data);
         // Query ChromaDB for top 5 most similar chunks
-        const results = yield collection.query({
+        const results = await collection.query({
             queryEmbeddings: [embedding],
             nResults: 5
         });
         // Format results
-        const matches = (results.documents[0] || []).map((text, i) => {
-            var _a, _b;
-            return ({
-                text,
-                source: (_a = results.metadatas[0][i]) === null || _a === void 0 ? void 0 : _a.source,
-                chunk_index: (_b = results.metadatas[0][i]) === null || _b === void 0 ? void 0 : _b.chunk_index,
-                score: results.distances[0][i]
-            });
-        });
+        const matches = (results.documents[0] || []).map((text, i) => ({
+            text,
+            source: results.metadatas[0][i]?.source,
+            chunk_index: results.metadatas[0][i]?.chunk_index,
+            score: results.distances[0][i]
+        }));
         // After matches are computed
         let grounded = true;
         let hallucination = false;
@@ -632,9 +678,9 @@ router.post('/search', (req, res) => __awaiter(void 0, void 0, void 0, function*
         const errorMessage = err instanceof Error ? err.message : String(err);
         res.status(500).json({ error: 'Search failed', details: err instanceof Error ? err.message : String(err) });
     }
-}));
+});
 // Admin endpoint to fetch last 100 bias/fairness log entries
-router.get('/bias-logs', (0, authorize_middleware_1.requirePermission)(auth_types_1.Permission.VIEW_SYSTEM_LOGS), (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.get('/bias-logs', (0, authorize_middleware_1.requirePermission)(auth_types_1.Permission.VIEW_SYSTEM_LOGS), async (req, res) => {
     try {
         if (!fs_1.default.existsSync(biasLogPath)) {
             return res.json({ logs: [] });
@@ -646,21 +692,21 @@ router.get('/bias-logs', (0, authorize_middleware_1.requirePermission)(auth_type
     catch (err) {
         res.status(500).json({ error: 'Failed to read bias/fairness logs.' });
     }
-}));
+});
 // Admin endpoint: analytics summary
-router.get('/admin/analytics', (0, authorize_middleware_1.requirePermission)(auth_types_1.Permission.READ_ADVANCED_ANALYTICS), (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.get('/admin/analytics', (0, authorize_middleware_1.requirePermission)(auth_types_1.Permission.READ_ADVANCED_ANALYTICS), async (req, res) => {
     try {
-        const summary = yield analytics_service_1.AnalyticsService.getOverallSummary();
+        const summary = await analytics_service_1.AnalyticsService.getOverallSummary();
         res.json({ summary });
     }
     catch (error) {
         res.status(500).json({ error: 'Failed to fetch analytics' });
     }
-}));
+});
 // Admin endpoint: user list
-router.get('/admin/users', (0, authorize_middleware_1.requirePermission)(auth_types_1.Permission.ADMIN_API_ACCESS), (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.get('/admin/users', (0, authorize_middleware_1.requirePermission)(auth_types_1.Permission.ADMIN_API_ACCESS), async (req, res) => {
     try {
-        const { data: users, error } = yield database_1.supabase
+        const { data: users, error } = await database_1.supabase
             .from('users')
             .select('id, name, email, county, language, role, is_active, created_at')
             .order('created_at', { ascending: false });
@@ -672,9 +718,9 @@ router.get('/admin/users', (0, authorize_middleware_1.requirePermission)(auth_ty
     catch (error) {
         res.status(500).json({ error: 'Failed to fetch users' });
     }
-}));
+});
 // Document management endpoints
-router.get('/admin/documents', (0, authorize_middleware_1.requirePermission)(auth_types_1.Permission.MANAGE_CONTENT), (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.get('/admin/documents', (0, authorize_middleware_1.requirePermission)(auth_types_1.Permission.MANAGE_CONTENT), async (req, res) => {
     try {
         const workspaceRoot = path_1.default.resolve(__dirname, '../../../');
         const laCountyDir = path_1.default.join(workspaceRoot, "chatbot/frontend/public/LA County");
@@ -696,17 +742,17 @@ router.get('/admin/documents', (0, authorize_middleware_1.requirePermission)(aut
     catch (err) {
         res.status(500).json({ error: 'Failed to fetch documents' });
     }
-}));
-router.post('/admin/documents/reindex', (0, authorize_middleware_1.requirePermission)(auth_types_1.Permission.MANAGE_CONTENT), (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+});
+router.post('/admin/documents/reindex', (0, authorize_middleware_1.requirePermission)(auth_types_1.Permission.MANAGE_CONTENT), async (req, res) => {
     try {
-        const result = yield (0, document_ingest_1.reindexAllDocuments)();
+        const result = await (0, document_ingest_1.reindexAllDocuments)();
         res.json({ message: 'Document reindexing completed', result });
     }
     catch (err) {
         res.status(500).json({ error: 'Failed to trigger reindexing', details: err instanceof Error ? err.message : String(err) });
     }
-}));
-router.post('/admin/documents/upload', (0, authorize_middleware_1.requirePermission)(auth_types_1.Permission.MANAGE_CONTENT), (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+});
+router.post('/admin/documents/upload', (0, authorize_middleware_1.requirePermission)(auth_types_1.Permission.MANAGE_CONTENT), async (req, res) => {
     try {
         // Handle file upload (placeholder for now)
         res.json({ message: 'File upload endpoint - implementation pending' });
@@ -714,5 +760,5 @@ router.post('/admin/documents/upload', (0, authorize_middleware_1.requirePermiss
     catch (err) {
         res.status(500).json({ error: 'Failed to upload file' });
     }
-}));
+});
 exports.default = router;

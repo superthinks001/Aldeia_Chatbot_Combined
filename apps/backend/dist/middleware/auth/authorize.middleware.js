@@ -215,8 +215,7 @@ exports.requireSelfOrAdmin = requireSelfOrAdmin;
  * @returns boolean indicating if user has permission
  */
 const hasPermission = (role, permission) => {
-    var _a;
-    return ((_a = ROLE_PERMISSIONS[role]) === null || _a === void 0 ? void 0 : _a.includes(permission)) || false;
+    return ROLE_PERMISSIONS[role]?.includes(permission) || false;
 };
 exports.hasPermission = hasPermission;
 /**

@@ -1,13 +1,4 @@
 "use strict";
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -24,7 +15,7 @@ router.use(sanitizeInput_1.sanitizeInput);
 // ====================================================================
 // GET USER PROJECTS (Protected Route)
 // ====================================================================
-router.get('/projects', auth_1.authenticateToken, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.get('/projects', auth_1.authenticateToken, async (req, res) => {
     try {
         if (!req.user) {
             return res.status(401).json({
@@ -42,7 +33,7 @@ router.get('/projects', auth_1.authenticateToken, (req, res) => __awaiter(void 0
         }
         query += ' ORDER BY updated_at DESC LIMIT ? OFFSET ?';
         params.push(Number(limit), Number(offset));
-        const projects = yield getProjects(query, params);
+        const projects = await getProjects(query, params);
         res.json({
             success: true,
             data: {
@@ -60,8 +51,8 @@ router.get('/projects', auth_1.authenticateToken, (req, res) => __awaiter(void 0
             error: 'Failed to retrieve projects'
         });
     }
-}));
-router.post('/projects', auth_1.authenticateToken, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+});
+router.post('/projects', auth_1.authenticateToken, async (req, res) => {
     try {
         if (!req.user) {
             return res.status(401).json({
@@ -86,7 +77,7 @@ router.post('/projects', auth_1.authenticateToken, (req, res) => __awaiter(void 
             preferences,
             status: 'planning'
         };
-        const project = yield createProject(projectData);
+        const project = await createProject(projectData);
         logger_1.logger.info(`New project created: ${project.name} by user ${userId}`);
         res.status(201).json({
             success: true,
@@ -101,11 +92,11 @@ router.post('/projects', auth_1.authenticateToken, (req, res) => __awaiter(void 
             error: 'Failed to create project'
         });
     }
-}));
+});
 // ====================================================================
 // UPDATE PROJECT (Protected Route)
 // ====================================================================
-router.put('/projects/:id', auth_1.authenticateToken, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.put('/projects/:id', auth_1.authenticateToken, async (req, res) => {
     try {
         if (!req.user) {
             return res.status(401).json({
@@ -117,7 +108,7 @@ router.put('/projects/:id', auth_1.authenticateToken, (req, res) => __awaiter(vo
         const userId = req.user.userId;
         const updates = req.body;
         // Check if project belongs to user
-        const project = yield getProjectById(id);
+        const project = await getProjectById(id);
         if (!project) {
             return res.status(404).json({
                 success: false,
@@ -130,7 +121,7 @@ router.put('/projects/:id', auth_1.authenticateToken, (req, res) => __awaiter(vo
                 error: 'Access denied'
             });
         }
-        yield updateProject(id, updates);
+        await updateProject(id, updates);
         logger_1.logger.info(`Project updated: ${id} by user ${userId}`);
         res.json({
             success: true,
@@ -144,11 +135,11 @@ router.put('/projects/:id', auth_1.authenticateToken, (req, res) => __awaiter(vo
             error: 'Failed to update project'
         });
     }
-}));
+});
 // ====================================================================
 // GET DESIGN MATCHES
 // ====================================================================
-router.get('/designs', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.get('/designs', async (req, res) => {
     try {
         const { style, budget, location, limit = 10 } = req.query;
         // Mock design matches - in real implementation, this would query a designs database
@@ -210,8 +201,8 @@ router.get('/designs', (req, res) => __awaiter(void 0, void 0, void 0, function*
             error: 'Failed to retrieve designs'
         });
     }
-}));
-router.post('/preferences', auth_1.authenticateToken, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+});
+router.post('/preferences', auth_1.authenticateToken, async (req, res) => {
     try {
         if (!req.user) {
             return res.status(401).json({
@@ -221,7 +212,7 @@ router.post('/preferences', auth_1.authenticateToken, (req, res) => __awaiter(vo
         }
         const userId = req.user.userId;
         const preferences = req.body;
-        yield saveUserPreferences(userId, preferences);
+        await saveUserPreferences(userId, preferences);
         logger_1.logger.info(`Preferences saved for user ${userId}`);
         res.json({
             success: true,
@@ -235,11 +226,11 @@ router.post('/preferences', auth_1.authenticateToken, (req, res) => __awaiter(vo
             error: 'Failed to save preferences'
         });
     }
-}));
+});
 // ====================================================================
 // GET USER PREFERENCES (Protected Route)
 // ====================================================================
-router.get('/preferences', auth_1.authenticateToken, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.get('/preferences', auth_1.authenticateToken, async (req, res) => {
     try {
         if (!req.user) {
             return res.status(401).json({
@@ -248,7 +239,7 @@ router.get('/preferences', auth_1.authenticateToken, (req, res) => __awaiter(voi
             });
         }
         const userId = req.user.userId;
-        const preferences = yield getUserPreferences(userId);
+        const preferences = await getUserPreferences(userId);
         res.json({
             success: true,
             data: preferences || {}
@@ -261,83 +252,79 @@ router.get('/preferences', auth_1.authenticateToken, (req, res) => __awaiter(voi
             error: 'Failed to retrieve preferences'
         });
     }
-}));
+});
 // ====================================================================
 // HELPER FUNCTIONS - Database Operations
 // ====================================================================
-function getProjects(sql, params) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const rows = yield (0, client_1.query)(sql, params);
-        return rows.map((row) => (Object.assign(Object.assign({}, row), { location: typeof row.location === 'string' ? JSON.parse(row.location) : row.location, preferences: typeof row.preferences === 'string' ? JSON.parse(row.preferences) : row.preferences })));
-    });
+async function getProjects(sql, params) {
+    const rows = await (0, client_1.query)(sql, params);
+    return rows.map((row) => ({
+        ...row,
+        location: typeof row.location === 'string' ? JSON.parse(row.location) : row.location,
+        preferences: typeof row.preferences === 'string' ? JSON.parse(row.preferences) : row.preferences
+    }));
 }
-function getProjectById(id) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const row = yield (0, client_1.queryOne)('SELECT * FROM rebuild_projects WHERE id = $1', [id]);
-        if (row) {
-            return Object.assign(Object.assign({}, row), { location: typeof row.location === 'string' ? JSON.parse(row.location) : row.location, preferences: typeof row.preferences === 'string' ? JSON.parse(row.preferences) : row.preferences });
-        }
-        return null;
-    });
-}
-function createProject(projectData) {
-    return __awaiter(this, void 0, void 0, function* () {
-        yield (0, client_1.execute)(`INSERT INTO rebuild_projects (id, user_id, name, location, preferences, status, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`, [
-            projectData.id,
-            projectData.userId,
-            projectData.name,
-            JSON.stringify(projectData.location),
-            JSON.stringify(projectData.preferences),
-            projectData.status
-        ]);
+async function getProjectById(id) {
+    const row = await (0, client_1.queryOne)('SELECT * FROM rebuild_projects WHERE id = $1', [id]);
+    if (row) {
         return {
-            id: projectData.id,
-            userId: projectData.userId,
-            name: projectData.name,
-            location: projectData.location,
-            preferences: projectData.preferences,
-            status: projectData.status,
-            createdAt: new Date(),
-            updatedAt: new Date()
+            ...row,
+            location: typeof row.location === 'string' ? JSON.parse(row.location) : row.location,
+            preferences: typeof row.preferences === 'string' ? JSON.parse(row.preferences) : row.preferences
         };
-    });
+    }
+    return null;
 }
-function updateProject(id, updates) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const fields = [];
-        const values = [];
-        let paramIndex = 1;
-        Object.keys(updates).forEach(key => {
-            if (key === 'location' || key === 'preferences') {
-                fields.push(`${key} = $${paramIndex++}`);
-                values.push(JSON.stringify(updates[key]));
-            }
-            else {
-                fields.push(`${key} = $${paramIndex++}`);
-                values.push(updates[key]);
-            }
-        });
-        fields.push('updated_at = CURRENT_TIMESTAMP');
-        values.push(id);
-        yield (0, client_1.execute)(`UPDATE rebuild_projects SET ${fields.join(', ')} WHERE id = $${paramIndex}`, values);
-    });
+async function createProject(projectData) {
+    await (0, client_1.execute)(`INSERT INTO rebuild_projects (id, user_id, name, location, preferences, status, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`, [
+        projectData.id,
+        projectData.userId,
+        projectData.name,
+        JSON.stringify(projectData.location),
+        JSON.stringify(projectData.preferences),
+        projectData.status
+    ]);
+    return {
+        id: projectData.id,
+        userId: projectData.userId,
+        name: projectData.name,
+        location: projectData.location,
+        preferences: projectData.preferences,
+        status: projectData.status,
+        createdAt: new Date(),
+        updatedAt: new Date()
+    };
 }
-function saveUserPreferences(userId, preferences) {
-    return __awaiter(this, void 0, void 0, function* () {
-        // PostgreSQL uses INSERT...ON CONFLICT instead of INSERT OR REPLACE
-        yield (0, client_1.execute)(`INSERT INTO user_preferences (user_id, preferences, updated_at)
+async function updateProject(id, updates) {
+    const fields = [];
+    const values = [];
+    let paramIndex = 1;
+    Object.keys(updates).forEach(key => {
+        if (key === 'location' || key === 'preferences') {
+            fields.push(`${key} = $${paramIndex++}`);
+            values.push(JSON.stringify(updates[key]));
+        }
+        else {
+            fields.push(`${key} = $${paramIndex++}`);
+            values.push(updates[key]);
+        }
+    });
+    fields.push('updated_at = CURRENT_TIMESTAMP');
+    values.push(id);
+    await (0, client_1.execute)(`UPDATE rebuild_projects SET ${fields.join(', ')} WHERE id = $${paramIndex}`, values);
+}
+async function saveUserPreferences(userId, preferences) {
+    // PostgreSQL uses INSERT...ON CONFLICT instead of INSERT OR REPLACE
+    await (0, client_1.execute)(`INSERT INTO user_preferences (user_id, preferences, updated_at)
      VALUES ($1, $2, CURRENT_TIMESTAMP)
      ON CONFLICT (user_id) DO UPDATE SET preferences = $2, updated_at = CURRENT_TIMESTAMP`, [userId, JSON.stringify(preferences)]);
-    });
 }
-function getUserPreferences(userId) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const row = yield (0, client_1.queryOne)('SELECT preferences FROM user_preferences WHERE user_id = $1', [userId]);
-        if (row) {
-            return typeof row.preferences === 'string' ? JSON.parse(row.preferences) : row.preferences;
-        }
-        return null;
-    });
+async function getUserPreferences(userId) {
+    const row = await (0, client_1.queryOne)('SELECT preferences FROM user_preferences WHERE user_id = $1', [userId]);
+    if (row) {
+        return typeof row.preferences === 'string' ? JSON.parse(row.preferences) : row.preferences;
+    }
+    return null;
 }
 exports.default = router;

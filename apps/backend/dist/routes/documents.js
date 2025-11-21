@@ -1,13 +1,4 @@
 "use strict";
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -48,7 +39,7 @@ const upload = (0, multer_1.default)({
 // ====================================================================
 // GET ALL DOCUMENTS
 // ====================================================================
-router.get('/', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.get('/', async (req, res) => {
     try {
         const { limit = 50, offset = 0, search } = req.query;
         let query = 'SELECT id, filename, created_at FROM documents';
@@ -59,7 +50,7 @@ router.get('/', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         }
         query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
         params.push(Number(limit), Number(offset));
-        const documents = yield getDocuments(query, params);
+        const documents = await getDocuments(query, params);
         res.json({
             success: true,
             data: {
@@ -77,14 +68,14 @@ router.get('/', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
             error: 'Failed to retrieve documents'
         });
     }
-}));
+});
 // ====================================================================
 // GET SPECIFIC DOCUMENT
 // ====================================================================
-router.get('/:id', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.get('/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const document = yield getDocumentById(id);
+        const document = await getDocumentById(id);
         if (!document) {
             return res.status(404).json({
                 success: false,
@@ -103,11 +94,11 @@ router.get('/:id', (req, res) => __awaiter(void 0, void 0, void 0, function* () 
             error: 'Failed to retrieve document'
         });
     }
-}));
+});
 // ====================================================================
 // UPLOAD DOCUMENT (Protected Route)
 // ====================================================================
-router.post('/', auth_1.authenticateToken, upload.single('document'), (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.post('/', auth_1.authenticateToken, upload.single('document'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({
@@ -137,7 +128,7 @@ router.post('/', auth_1.authenticateToken, upload.single('document'), (req, res)
                 size: req.file.size
             }
         };
-        const document = yield createDocument(documentData);
+        const document = await createDocument(documentData);
         logger_1.logger.info(`Document uploaded: ${document.filename} by user ${userId}`);
         res.status(201).json({
             success: true,
@@ -152,11 +143,11 @@ router.post('/', auth_1.authenticateToken, upload.single('document'), (req, res)
             error: 'Failed to upload document'
         });
     }
-}));
+});
 // ====================================================================
 // DELETE DOCUMENT (Protected Route - Admin only)
 // ====================================================================
-router.delete('/:id', auth_1.authenticateToken, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.delete('/:id', auth_1.authenticateToken, async (req, res) => {
     try {
         if (!req.user) {
             return res.status(401).json({
@@ -173,14 +164,14 @@ router.delete('/:id', auth_1.authenticateToken, (req, res) => __awaiter(void 0, 
                 error: 'Insufficient permissions'
             });
         }
-        const document = yield getDocumentById(id);
+        const document = await getDocumentById(id);
         if (!document) {
             return res.status(404).json({
                 success: false,
                 error: 'Document not found'
             });
         }
-        yield deleteDocument(id);
+        await deleteDocument(id);
         logger_1.logger.info(`Document deleted: ${document.filename} by user ${req.user.userId}`);
         res.json({
             success: true,
@@ -194,43 +185,35 @@ router.delete('/:id', auth_1.authenticateToken, (req, res) => __awaiter(void 0, 
             error: 'Failed to delete document'
         });
     }
-}));
+});
 // ====================================================================
 // HELPER FUNCTIONS - Database Operations
 // ====================================================================
-function getDocuments(sql, params) {
-    return __awaiter(this, void 0, void 0, function* () {
-        return yield (0, client_1.query)(sql, params);
-    });
+async function getDocuments(sql, params) {
+    return await (0, client_1.query)(sql, params);
 }
-function getDocumentById(id) {
-    return __awaiter(this, void 0, void 0, function* () {
-        return yield (0, client_1.queryOne)('SELECT * FROM documents WHERE id = $1', [id]);
-    });
+async function getDocumentById(id) {
+    return await (0, client_1.queryOne)('SELECT * FROM documents WHERE id = $1', [id]);
 }
-function createDocument(documentData) {
-    return __awaiter(this, void 0, void 0, function* () {
-        yield (0, client_1.execute)(`INSERT INTO documents (id, filename, content, file_path, uploaded_by, metadata, created_at)
+async function createDocument(documentData) {
+    await (0, client_1.execute)(`INSERT INTO documents (id, filename, content, file_path, uploaded_by, metadata, created_at)
      VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)`, [
-            documentData.id,
-            documentData.filename,
-            documentData.content,
-            documentData.filePath,
-            documentData.uploadedBy,
-            JSON.stringify(documentData.metadata)
-        ]);
-        return {
-            id: documentData.id,
-            filename: documentData.filename,
-            content: documentData.content,
-            createdAt: new Date(),
-            metadata: documentData.metadata
-        };
-    });
+        documentData.id,
+        documentData.filename,
+        documentData.content,
+        documentData.filePath,
+        documentData.uploadedBy,
+        JSON.stringify(documentData.metadata)
+    ]);
+    return {
+        id: documentData.id,
+        filename: documentData.filename,
+        content: documentData.content,
+        createdAt: new Date(),
+        metadata: documentData.metadata
+    };
 }
-function deleteDocument(id) {
-    return __awaiter(this, void 0, void 0, function* () {
-        yield (0, client_1.execute)('DELETE FROM documents WHERE id = $1', [id]);
-    });
+async function deleteDocument(id) {
+    await (0, client_1.execute)('DELETE FROM documents WHERE id = $1', [id]);
 }
 exports.default = router;

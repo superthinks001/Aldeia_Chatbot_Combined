@@ -232,7 +232,7 @@ export function classifyIntent(message: string, context?: any): IntentResult {
 /**
  * Extract named entities from message
  */
-function extractEntities(message: string, context?: any): IntentResult['entities'] {
+export function extractEntities(message: string, context?: any): IntentResult['entities'] {
   const entities: IntentResult['entities'] = {};
 
   // Location extraction
