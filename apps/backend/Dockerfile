@@ -15,9 +15,7 @@ COPY package*.json ./
 # Copy all workspace package.json files to satisfy npm workspaces
 COPY apps/backend/package*.json ./apps/backend/
 COPY apps/chatbot-frontend/package*.json ./apps/chatbot-frontend/
-COPY packages/utils/package*.json ./packages/utils/ 2>/dev/null || true
-COPY packages/shared-types/package*.json ./packages/shared-types/ 2>/dev/null || true
-COPY packages/ui-components/package*.json ./packages/ui-components/ 2>/dev/null || true
+COPY packages/ ./packages/
 
 # Install all workspace dependencies
 RUN npm ci
@@ -44,18 +42,13 @@ WORKDIR /workspace
 COPY package*.json ./
 COPY apps/backend/package*.json ./apps/backend/
 COPY apps/chatbot-frontend/package*.json ./apps/chatbot-frontend/
-COPY packages/utils/package*.json ./packages/utils/ 2>/dev/null || true
-COPY packages/shared-types/package*.json ./packages/shared-types/ 2>/dev/null || true
-COPY packages/ui-components/package*.json ./packages/ui-components/ 2>/dev/null || true
+COPY packages/ ./packages/
 
 # Install production dependencies for the entire workspace
 RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 
 # Copy built application from builder stage
 COPY --from=builder --chown=nodejs:nodejs /workspace/apps/backend/dist ./apps/backend/dist
-
-# Copy any shared packages source that might be needed at runtime
-COPY --from=builder --chown=nodejs:nodejs /workspace/packages ./packages
 
 # Create logs directory
 RUN mkdir -p /workspace/apps/backend/logs && chown -R nodejs:nodejs /workspace/apps/backend/logs

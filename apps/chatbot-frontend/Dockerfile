@@ -15,9 +15,7 @@ COPY package*.json ./
 # Copy all workspace package.json files to satisfy npm workspaces
 COPY apps/backend/package*.json ./apps/backend/
 COPY apps/chatbot-frontend/package*.json ./apps/chatbot-frontend/
-COPY packages/utils/package*.json ./packages/utils/ 2>/dev/null || true
-COPY packages/shared-types/package*.json ./packages/shared-types/ 2>/dev/null || true
-COPY packages/ui-components/package*.json ./packages/ui-components/ 2>/dev/null || true
+COPY packages/ ./packages/
 
 # Install all workspace dependencies
 RUN npm ci
