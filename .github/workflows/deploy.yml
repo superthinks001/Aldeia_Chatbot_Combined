@@ -5,8 +5,13 @@ name: CD - Deploy
 # ============================================
 # Deploys to staging on development branch
 # Deploys to production on main branch
-# Builds and pushes Docker images to registry
-# Deploys via SSH to target server
+#
+# PREREQUISITES (must be running on server):
+# - Redis (deployed via scripts/deployment/deploy-redis.sh)
+# - ChromaDB (deployed via scripts/deployment/deploy-chromadb.sh)
+# - Supabase (cloud service)
+#
+# This workflow only handles backend and frontend deployment
 # ============================================
 
 on:
@@ -62,8 +67,8 @@ jobs:
 
       - name: Display deployment info
         run: |
-          echo "🚀 Deploying to: ${{ steps.set-env.outputs.environment }}"
-          echo "📄 Using compose file: ${{ steps.set-env.outputs.compose_file }}"
+          echo "Deploying to: ${{ steps.set-env.outputs.environment }}"
+          echo "Using compose file: ${{ steps.set-env.outputs.compose_file }}"
 
   # ============================================
   # BUILD AND PUSH DOCKER IMAGES
@@ -125,12 +130,90 @@ jobs:
         run: echo "Image pushed with digest ${{ steps.meta.outputs.digest }}"
 
   # ============================================
+  # CHECK INFRASTRUCTURE HEALTH
+  # ============================================
+  check-infrastructure:
+    name: Check Infrastructure Health
+    runs-on: ubuntu-latest
+    needs: [setup, build-and-push]
+    environment:
+      name: ${{ needs.setup.outputs.environment }}
+
+    steps:
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add server to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Check Redis health
+        run: |
+          echo "Checking Redis health..."
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
+            if docker ps --format '{{.Names}}' | grep -q "aldeia-redis"; then
+              if docker exec aldeia-redis redis-cli -a "$REDIS_PASSWORD" ping 2>/dev/null | grep -q "PONG"; then
+                echo "Redis is healthy"
+              else
+                echo "ERROR: Redis is running but not responding"
+                exit 1
+              fi
+            else
+              echo "ERROR: Redis container is not running"
+              echo "Please run: ./scripts/deployment/deploy-redis.sh start"
+              exit 1
+            fi
+          EOF
+        env:
+          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+
+      - name: Check ChromaDB health
+        run: |
+          echo "Checking ChromaDB health..."
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
+            if docker ps --format '{{.Names}}' | grep -q "aldeia-chromadb"; then
+              if curl -s -f "http://localhost:8000/api/v2/heartbeat" > /dev/null 2>&1; then
+                echo "ChromaDB is healthy"
+              else
+                echo "ERROR: ChromaDB is running but not responding"
+                exit 1
+              fi
+            else
+              echo "ERROR: ChromaDB container is not running"
+              echo "Please run: ./scripts/deployment/deploy-chromadb.sh start"
+              exit 1
+            fi
+          EOF
+
+      - name: Check Supabase connectivity
+        run: |
+          echo "Checking Supabase connectivity..."
+          if curl -s -f "${{ secrets.SUPABASE_URL }}/rest/v1/" -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" > /dev/null 2>&1; then
+            echo "Supabase is accessible"
+          else
+            echo "ERROR: Cannot connect to Supabase"
+            exit 1
+          fi
+
+      - name: Infrastructure check passed
+        run: |
+          echo "============================================"
+          echo "All infrastructure checks passed!"
+          echo "  - Redis: Healthy"
+          echo "  - ChromaDB: Healthy"
+          echo "  - Supabase: Accessible"
+          echo "============================================"
+
+  # ============================================
   # DEPLOY TO TARGET ENVIRONMENT
   # ============================================
   deploy:
     name: Deploy to ${{ needs.setup.outputs.environment }}
     runs-on: ubuntu-latest
-    needs: [setup, build-and-push]
+    needs: [setup, build-and-push, check-infrastructure]
     environment:
       name: ${{ needs.setup.outputs.environment }}
 
@@ -170,11 +253,13 @@ jobs:
           BACKEND_URL=http://${{ secrets.SERVER_HOST }}:3001
           FRONTEND_CHAT_URL=http://${{ secrets.SERVER_HOST }}:3000
 
-          CHROMA_HOST=chromadb
+          # ChromaDB - connects to standalone container on aldeia-network
+          CHROMA_HOST=aldeia-chromadb
           CHROMA_PORT=8000
           CHROMA_AUTH_TOKEN=${{ secrets.CHROMA_AUTH_TOKEN }}
 
-          REDIS_URL=redis://redis:6379
+          # Redis - connects to standalone container on aldeia-network
+          REDIS_URL=redis://aldeia-redis:6379
           REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
 
           STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}
@@ -203,36 +288,6 @@ jobs:
           HEALTH_CHECK_TIMEOUT=5000
           EOF
 
-      - name: Install Docker on server (if not already installed)
-        run: |
-          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
-            # Check if Docker is installed
-            if ! command -v docker &> /dev/null; then
-              echo "Installing Docker..."
-              sudo apt-get update
-              sudo apt-get install -y ca-certificates curl gnupg lsb-release
-              sudo mkdir -p /etc/apt/keyrings
-              curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-              echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-              sudo apt-get update
-              sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-              sudo usermod -aG docker $USER
-              echo "Docker installed successfully"
-            else
-              echo "Docker is already installed"
-            fi
-
-            # Check if Docker Compose is installed
-            if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/null; then
-              echo "Installing Docker Compose..."
-              sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-              sudo chmod +x /usr/local/bin/docker-compose
-              echo "Docker Compose installed successfully"
-            else
-              echo "Docker Compose is already installed"
-            fi
-          EOF
-
       - name: Login to GitHub Container Registry on server
         run: |
           ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << EOF
@@ -249,7 +304,7 @@ jobs:
           scp -r nginx ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:~/aldeia/ || echo "No nginx directory to copy"
           scp .env.${{ needs.setup.outputs.environment }} ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:~/aldeia/.env
 
-      - name: Deploy on server
+      - name: Deploy application
         env:
           COMPOSE_FILE: ${{ needs.setup.outputs.compose_file }}
         run: |
@@ -257,12 +312,15 @@ jobs:
             cd ~/aldeia
 
             # Pull latest images
+            echo "Pulling latest images..."
             docker compose -f ${{ needs.setup.outputs.compose_file }} pull
 
-            # Stop old containers
+            # Stop old containers (only backend and frontend)
+            echo "Stopping old containers..."
             docker compose -f ${{ needs.setup.outputs.compose_file }} down
 
             # Start new containers
+            echo "Starting new containers..."
             docker compose -f ${{ needs.setup.outputs.compose_file }} up -d
 
             # Wait for health checks
@@ -291,12 +349,14 @@ jobs:
           sleep 10
 
           # Check backend health
+          echo "Checking backend health..."
           curl -f http://${{ secrets.SERVER_HOST }}:3001/api/health || exit 1
 
           # Check frontend
+          echo "Checking frontend health..."
           curl -f http://${{ secrets.SERVER_HOST }}:3000/ || exit 1
 
-          echo "✅ Deployment verification successful!"
+          echo "Deployment verification successful!"
 
       - name: Rollback on failure
         if: failure()
@@ -305,7 +365,7 @@ jobs:
         run: |
           ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << EOF
             cd ~/aldeia
-            echo "⚠️ Deployment failed, attempting rollback..."
+            echo "Deployment failed, attempting rollback..."
             docker compose -f ${{ needs.setup.outputs.compose_file }} down
             docker compose -f ${{ needs.setup.outputs.compose_file }} up -d
           EOF
@@ -314,9 +374,9 @@ jobs:
         if: always()
         run: |
           if [ "${{ job.status }}" == "success" ]; then
-            echo "✅ Deployment to ${{ needs.setup.outputs.environment }} successful!"
+            echo "Deployment to ${{ needs.setup.outputs.environment }} successful!"
           else
-            echo "❌ Deployment to ${{ needs.setup.outputs.environment }} failed!"
+            echo "Deployment to ${{ needs.setup.outputs.environment }} failed!"
           fi
 
   # ============================================
@@ -340,26 +400,26 @@ jobs:
           # Test backend health
           response=$(curl -s -o /dev/null -w "%{http_code}" http://${{ secrets.SERVER_HOST }}:3001/api/health)
           if [ "$response" != "200" ]; then
-            echo "❌ Backend health check failed (HTTP $response)"
+            echo "Backend health check failed (HTTP $response)"
             exit 1
           fi
-          echo "✅ Backend health check passed"
+          echo "Backend health check passed"
 
           # Test frontend
           response=$(curl -s -o /dev/null -w "%{http_code}" http://${{ secrets.SERVER_HOST }}:3000/)
           if [ "$response" != "200" ]; then
-            echo "❌ Frontend check failed (HTTP $response)"
+            echo "Frontend check failed (HTTP $response)"
             exit 1
           fi
-          echo "✅ Frontend check passed"
+          echo "Frontend check passed"
 
-          echo "✅ All smoke tests passed!"
+          echo "All smoke tests passed!"
 
       - name: Performance check
         run: |
           echo "Checking API response times..."
           time curl -s http://${{ secrets.SERVER_HOST }}:3001/api/health > /dev/null
-          echo "✅ Performance check completed"
+          echo "Performance check completed"
 
   # ============================================
   # CLEANUP OLD IMAGES
@@ -392,7 +452,7 @@ jobs:
             # Remove old containers
             docker container prune -f
 
-            echo "✅ Cleanup completed"
+            echo "Cleanup completed"
           EOF
 
 # ============================================
@@ -418,4 +478,9 @@ jobs:
 # GOOGLE_TRANSLATE_API_KEY - Google Translate API key
 # SENTRY_DSN - Sentry error tracking DSN
 # SESSION_SECRET - Session secret
+#
+# PREREQUISITES:
+# Before running this workflow, ensure these are running on the server:
+# 1. Redis: ./scripts/deployment/deploy-redis.sh start
+# 2. ChromaDB: ./scripts/deployment/deploy-chromadb.sh start
 # ============================================

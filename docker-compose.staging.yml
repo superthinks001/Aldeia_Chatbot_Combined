@@ -1,7 +1,13 @@
 # ============================================
 # ALDEIA CHATBOT - STAGING DOCKER COMPOSE
 # ============================================
-# This file orchestrates all services for staging deployment
+# This file orchestrates backend and frontend services for staging
+#
+# PREREQUISITES:
+# - Redis must be running (use scripts/deployment/deploy-redis.sh)
+# - ChromaDB must be running (use scripts/deployment/deploy-chromadb.sh)
+# - Supabase must be accessible
+#
 # Uses pre-built images from GitHub Container Registry
 # ============================================
 
@@ -26,10 +32,12 @@ services:
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
       - JWT_EXPIRATION=${JWT_EXPIRATION:-24h}
       - JWT_REFRESH_EXPIRATION=${JWT_REFRESH_EXPIRATION:-30d}
-      - CHROMA_HOST=${CHROMA_HOST:-chromadb}
+      # ChromaDB - connects to standalone container
+      - CHROMA_HOST=${CHROMA_HOST:-aldeia-chromadb}
       - CHROMA_PORT=${CHROMA_PORT:-8000}
       - CHROMA_AUTH_TOKEN=${CHROMA_AUTH_TOKEN}
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      # Redis - connects to standalone container
+      - REDIS_URL=${REDIS_URL:-redis://aldeia-redis:6379}
       - REDIS_PASSWORD=${REDIS_PASSWORD}
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
@@ -38,11 +46,6 @@ services:
       - SENTRY_DSN=${SENTRY_DSN}
       - LOG_LEVEL=${LOG_LEVEL:-debug}
       - ENABLE_MONITORING=${ENABLE_MONITORING:-true}
-    depends_on:
-      redis:
-        condition: service_healthy
-      chromadb:
-        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/api/health"]
       interval: 30s
@@ -58,7 +61,7 @@ services:
           cpus: '0.25'
           memory: 256M
     networks:
-      - aldeia-staging-network
+      - aldeia-network
     volumes:
       - ./logs/backend:/app/logs
     logging:
@@ -94,142 +97,42 @@ services:
           cpus: '0.1'
           memory: 64M
     networks:
-      - aldeia-staging-network
+      - aldeia-network
     logging:
       driver: "json-file"
       options:
         max-size: "5m"
         max-file: "3"
-
-  # ============================================
-  # REDIS CACHE SERVICE
-  # ============================================
-  redis:
-    image: redis:7-alpine
-    container_name: aldeia-redis-staging
-    restart: unless-stopped
-    command: >
-      redis-server
-      --requirepass ${REDIS_PASSWORD}
-      --maxmemory 128mb
-      --maxmemory-policy allkeys-lru
-      --appendonly yes
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-      start_period: 5s
-    deploy:
-      resources:
-        limits:
-          cpus: '0.25'
-          memory: 256M
-        reservations:
-          cpus: '0.05'
-          memory: 64M
-    networks:
-      - aldeia-staging-network
-    volumes:
-      - redis-staging-data:/data
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "5m"
-        max-file: "2"
-
-  # ============================================
-  # CHROMADB VECTOR DATABASE SERVICE
-  # ============================================
-  chromadb:
-    image: chromadb/chroma:latest
-    container_name: aldeia-chromadb-staging
-    restart: unless-stopped
-    ports:
-      - "8000:8000"
-    environment:
-      - CHROMA_SERVER_AUTH_CREDENTIALS=${CHROMA_AUTH_TOKEN}
-      - CHROMA_SERVER_AUTH_PROVIDER=chromadb.auth.token.TokenAuthServerProvider
-      - IS_PERSISTENT=TRUE
-      - ANONYMIZED_TELEMETRY=FALSE
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v2/heartbeat')\" || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 2G
-        reservations:
-          cpus: '0.25'
-          memory: 512M
-    networks:
-      - aldeia-staging-network
-    volumes:
-      - chromadb-staging-data:/chroma/chroma
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  # ============================================
-  # NGINX REVERSE PROXY SERVICE (Optional)
-  # ============================================
-  # Uncomment if you want to use nginx for staging
-  # nginx:
-  #   image: nginx:alpine
-  #   container_name: aldeia-nginx-staging
-  #   restart: unless-stopped
-  #   ports:
-  #     - "80:80"
-  #     - "443:443"
-  #   volumes:
-  #     - ./nginx/nginx.staging.conf:/etc/nginx/nginx.conf:ro
-  #     - ./nginx/logs:/var/log/nginx
-  #   depends_on:
-  #     - backend
-  #     - chatbot-frontend
-  #   healthcheck:
-  #     test: ["CMD", "nginx", "-t"]
-  #     interval: 30s
-  #     timeout: 5s
-  #     retries: 3
-  #   networks:
-  #     - aldeia-staging-network
 
 # ============================================
 # NETWORKS
 # ============================================
 networks:
-  aldeia-staging-network:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.21.0.0/16
-
-# ============================================
-# VOLUMES
-# ============================================
-volumes:
-  redis-staging-data:
-    driver: local
-  chromadb-staging-data:
-    driver: local
+  aldeia-network:
+    external: true
+    name: aldeia-network
 
 # ============================================
 # STAGING DEPLOYMENT NOTES:
 # ============================================
-# This configuration uses pre-built images from ghcr.io
-# Images are tagged with :staging when built from development branch
+# PREREQUISITES - Run these BEFORE deploying:
+#
+# 1. Deploy infrastructure services (run once):
+#    export REDIS_PASSWORD='your-redis-password'
+#    export CHROMA_AUTH_TOKEN='your-chroma-token'
+#    ./scripts/deployment/deploy-redis.sh start
+#    ./scripts/deployment/deploy-chromadb.sh start
+#
+# 2. Verify infrastructure is healthy:
+#    ./scripts/deployment/deploy-redis.sh status
+#    ./scripts/deployment/deploy-chromadb.sh status
+#
+# 3. Deploy application:
+#    docker compose -f docker-compose.staging.yml pull
+#    docker compose -f docker-compose.staging.yml up -d
 #
 # Required environment variables (set in .env file):
-# - GITHUB_REPOSITORY (auto-set by workflow)
+# - GITHUB_REPOSITORY_LOWER (auto-set by workflow)
 # - DATABASE_URL
 # - SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
 # - JWT_SECRET, JWT_REFRESH_SECRET
@@ -237,9 +140,4 @@ volumes:
 # - REDIS_PASSWORD
 # - STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET (can be test keys)
 # - CORS_ORIGINS
-#
-# To deploy manually:
-# 1. docker login ghcr.io -u YOUR_GITHUB_USERNAME
-# 2. docker compose -f docker-compose.staging.yml pull
-# 3. docker compose -f docker-compose.staging.yml up -d
 # ============================================
