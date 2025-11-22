@@ -10,7 +10,7 @@ services:
   # BACKEND API SERVICE
   # ============================================
   backend:
-    image: ghcr.io/${GITHUB_REPOSITORY:-superthinks001/aldeia_chatbot_combined}/backend:staging
+    image: ghcr.io/${GITHUB_REPOSITORY_LOWER:-superthinks001/aldeia_chatbot_combined}/backend:staging
     container_name: aldeia-backend-staging
     restart: unless-stopped
     ports:
@@ -71,7 +71,7 @@ services:
   # CHATBOT FRONTEND SERVICE
   # ============================================
   chatbot-frontend:
-    image: ghcr.io/${GITHUB_REPOSITORY:-superthinks001/aldeia_chatbot_combined}/chatbot-frontend:staging
+    image: ghcr.io/${GITHUB_REPOSITORY_LOWER:-superthinks001/aldeia_chatbot_combined}/chatbot-frontend:staging
     container_name: aldeia-chatbot-frontend-staging
     restart: unless-stopped
     ports:

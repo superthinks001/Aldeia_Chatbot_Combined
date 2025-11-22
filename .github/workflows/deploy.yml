@@ -30,7 +30,6 @@ on:
 env:
   NODE_VERSION: '18'
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   # ============================================
@@ -85,6 +84,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set image name to lowercase
+        id: image-name
+        run: echo "IMAGE_NAME_LOWER=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -99,7 +102,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.service }}
+          images: ${{ env.REGISTRY }}/${{ steps.image-name.outputs.IMAGE_NAME_LOWER }}/${{ matrix.service }}
           tags: |
             type=ref,event=branch
             type=sha,prefix={{branch}}-
@@ -147,9 +150,10 @@ jobs:
 
       - name: Create .env file
         run: |
+          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           cat > .env.${{ needs.setup.outputs.environment }} << EOF
           NODE_ENV=${{ needs.setup.outputs.environment }}
-          GITHUB_REPOSITORY=${{ github.repository }}
+          GITHUB_REPOSITORY_LOWER=${REPO_LOWER}
           BACKEND_PORT=3001
           CHATBOT_FRONTEND_PORT=3000
 
