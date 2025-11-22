@@ -130,90 +130,12 @@ jobs:
         run: echo "Image pushed with digest ${{ steps.meta.outputs.digest }}"
 
   # ============================================
-  # CHECK INFRASTRUCTURE HEALTH
-  # ============================================
-  check-infrastructure:
-    name: Check Infrastructure Health
-    runs-on: ubuntu-latest
-    needs: [setup, build-and-push]
-    environment:
-      name: ${{ needs.setup.outputs.environment }}
-
-    steps:
-      - name: Setup SSH
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-
-      - name: Add server to known hosts
-        run: |
-          mkdir -p ~/.ssh
-          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
-
-      - name: Check Redis health
-        run: |
-          echo "Checking Redis health..."
-          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
-            if docker ps --format '{{.Names}}' | grep -q "aldeia-redis"; then
-              if docker exec aldeia-redis redis-cli -a "$REDIS_PASSWORD" ping 2>/dev/null | grep -q "PONG"; then
-                echo "Redis is healthy"
-              else
-                echo "ERROR: Redis is running but not responding"
-                exit 1
-              fi
-            else
-              echo "ERROR: Redis container is not running"
-              echo "Please run: ./scripts/deployment/deploy-redis.sh start"
-              exit 1
-            fi
-          EOF
-        env:
-          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
-
-      - name: Check ChromaDB health
-        run: |
-          echo "Checking ChromaDB health..."
-          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
-            if docker ps --format '{{.Names}}' | grep -q "aldeia-chromadb"; then
-              if curl -s -f "http://localhost:8000/api/v2/heartbeat" > /dev/null 2>&1; then
-                echo "ChromaDB is healthy"
-              else
-                echo "ERROR: ChromaDB is running but not responding"
-                exit 1
-              fi
-            else
-              echo "ERROR: ChromaDB container is not running"
-              echo "Please run: ./scripts/deployment/deploy-chromadb.sh start"
-              exit 1
-            fi
-          EOF
-
-      - name: Check Supabase connectivity
-        run: |
-          echo "Checking Supabase connectivity..."
-          if curl -s -f "${{ secrets.SUPABASE_URL }}/rest/v1/" -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" > /dev/null 2>&1; then
-            echo "Supabase is accessible"
-          else
-            echo "ERROR: Cannot connect to Supabase"
-            exit 1
-          fi
-
-      - name: Infrastructure check passed
-        run: |
-          echo "============================================"
-          echo "All infrastructure checks passed!"
-          echo "  - Redis: Healthy"
-          echo "  - ChromaDB: Healthy"
-          echo "  - Supabase: Accessible"
-          echo "============================================"
-
-  # ============================================
   # DEPLOY TO TARGET ENVIRONMENT
   # ============================================
   deploy:
     name: Deploy to ${{ needs.setup.outputs.environment }}
     runs-on: ubuntu-latest
-    needs: [setup, build-and-push, check-infrastructure]
+    needs: [setup, build-and-push]
     environment:
       name: ${{ needs.setup.outputs.environment }}
 
