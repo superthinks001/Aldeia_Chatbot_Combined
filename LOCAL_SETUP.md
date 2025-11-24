@@ -2,6 +2,8 @@
 
 Complete guide to set up your local development environment with all dependencies.
 
+As of 11/23/2025, Redis and ChromaDB are running on AWS and don't need to be setup locally. Ass the setps involving Docker setup can be ignored (1, 3, 4)
+
 ## 📋 Prerequisites
 
 Before you begin, ensure you have the following installed:
@@ -98,6 +100,9 @@ CHROMA_PORT=8000
 # Navigate to backend
 cd apps/backend
 
+# Install dependencies (first time only)
+npm install
+
 # Start development server
 npm run dev
 ```
@@ -111,6 +116,9 @@ Open a NEW terminal:
 ```bash
 # Navigate to frontend
 cd apps/chatbot-frontend
+
+# Install dependencies (first time only)
+npm install
 
 # Start development server
 npm start
@@ -186,6 +194,8 @@ curl http://localhost:3001/api/health
 
 ## 🐛 Troubleshooting
 
+If Redis / ChromaDB are running remotely, the commands below need to be executed after logging into the remote server (SSH)
+
 ### Docker Issues
 
 **Problem:** Docker services won't start
@@ -211,7 +221,7 @@ taskkill /F /PID <PID>
 
 ### Redis Connection Issues
 
-**Problem:** Backend can't connect to Redis
+**Problem:** Backend can't connect to Redis. 
 
 1. Check Redis is running:
    ```bash
@@ -220,7 +230,8 @@ taskkill /F /PID <PID>
 
 2. Test Redis connection:
    ```bash
-   docker exec -it aldeia-redis-dev redis-cli ping
+   # replace KEY with the Redis password
+   docker exec -it aldeia-redis-dev -a 'KEY' redis-cli ping
    ```
 
 3. Check backend .env has correct settings:
@@ -268,38 +279,7 @@ taskkill /F /PID <PID>
 
 ## 🔄 Development Workflow
 
-### Daily Workflow
-
-1. **Start Docker services** (if not running):
-   ```bash
-   docker-compose -f docker-compose.dev.yml up -d
-   ```
-
-2. **Start backend**:
-   ```bash
-   cd apps/backend && npm run dev
-   ```
-
-3. **Start frontend** (new terminal):
-   ```bash
-   cd apps/chatbot-frontend && npm start
-   ```
-
-4. **Develop and test** your changes
-
-5. **Run tests before committing**:
-   ```bash
-   bash run-all-tests.sh
-   ```
-
-### When Finished
-
-```bash
-# Stop backend/frontend (Ctrl+C in their terminals)
-
-# Optionally stop Docker services to save resources
-docker-compose -f docker-compose.dev.yml down
-```
+See **[Development Workflow](docs/DEVELOPMENT_WORKFLOW.md)**
 
 ## 📝 Notes
 
@@ -323,6 +303,5 @@ If you encounter issues:
 If all tests pass, you're ready to develop! Visit:
 - **Frontend**: http://localhost:3000
 - **Backend API**: http://localhost:3001/api/health
-- **ChromaDB**: http://localhost:8000/api/v2/heartbeat
 
 Happy coding! 🚀

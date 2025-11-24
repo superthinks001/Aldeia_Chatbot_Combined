@@ -6,10 +6,22 @@
 # Comprehensive automated testing
 # ============================================
 
-set -e
+# set -e  # Commented out to allow tests to continue on failure
 
 echo "🧪 Starting Comprehensive Test Suite"
 echo "====================================="
+echo ""
+
+# Detect if running in WSL and set appropriate host
+if grep -qi microsoft /proc/version 2>/dev/null; then
+    # Running in WSL - WSL2 can access Windows localhost directly
+    HOST="localhost"
+    echo "🐧 Detected WSL environment - using localhost (WSL2 can access Windows services)"
+else
+    # Running natively on Linux/Mac or directly on Windows
+    HOST="localhost"
+    echo "💻 Detected native environment - using localhost"
+fi
 echo ""
 
 # Colors
@@ -47,13 +59,13 @@ run_test() {
 
 echo -e "${BLUE}Test Suite 1: Service Health${NC}"
 
-run_test "Backend Health" "curl -f http://localhost:3001/api/health"
-run_test "Frontend Load" "curl -f http://localhost:3000/ || curl -f http://localhost:3002/"
+run_test "Backend Health" "curl -f http://$HOST:3001/api/health"
+run_test "Frontend Load" "curl -f http://$HOST:3000/"
 run_test "Redis Connection" "docker exec aldeia-redis redis-cli ping 2>/dev/null | grep -q PONG || docker-compose exec -T redis redis-cli ping 2>/dev/null | grep -q PONG"
 
 # ChromaDB is optional
-if curl -s http://localhost:8000/api/v1/heartbeat > /dev/null 2>&1; then
-    run_test "ChromaDB Health" "curl -f http://localhost:8000/api/v1/heartbeat"
+if curl -s http://$HOST:8000/api/v2/heartbeat > /dev/null 2>&1; then
+    run_test "ChromaDB Health" "curl -f http://$HOST:8000/api/v2/heartbeat"
 else
     echo -e "Testing: ChromaDB Health... ${YELLOW}⚠️  SKIP (optional)${NC}"
 fi
@@ -72,7 +84,7 @@ TEST_EMAIL="automated-test-${TIMESTAMP}@example.com"
 TEST_PASSWORD="AutoTest123!"
 
 # Test Registration
-REGISTER_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST http://localhost:3001/api/auth/register \
+REGISTER_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST http://$HOST:3001/api/auth/register \
   -H "Content-Type: application/json" \
   -d "{
     \"email\": \"$TEST_EMAIL\",
@@ -99,7 +111,7 @@ else
 fi
 
 # Test Login
-LOGIN_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST http://localhost:3001/api/auth/login \
+LOGIN_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST http://$HOST:3001/api/auth/login \
   -H "Content-Type: application/json" \
   -d "{
     \"email\": \"$TEST_EMAIL\",
@@ -118,7 +130,7 @@ fi
 
 # Test Protected Endpoint with Token
 if [ -n "$ACCESS_TOKEN" ]; then
-    PROFILE_CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $ACCESS_TOKEN" http://localhost:3001/api/auth/profile)
+    PROFILE_CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $ACCESS_TOKEN" http://$HOST:3001/api/auth/profile)
     if [ "$PROFILE_CODE" = "200" ]; then
         echo -e "Testing: Protected Endpoint... ${GREEN}✓ PASS${NC}"
         ((PASSED++))
@@ -130,7 +142,7 @@ if [ -n "$ACCESS_TOKEN" ]; then
 fi
 
 # Test Unauthorized Access
-UNAUTH_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/api/auth/profile)
+UNAUTH_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://$HOST:3001/api/auth/profile)
 if [ "$UNAUTH_CODE" = "401" ]; then
     echo -e "Testing: Unauthorized Access Block... ${GREEN}✓ PASS${NC}"
     ((PASSED++))
@@ -142,7 +154,7 @@ fi
 
 # Test Token Verification
 if [ -n "$ACCESS_TOKEN" ]; then
-    VERIFY_CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $ACCESS_TOKEN" http://localhost:3001/api/auth/verify)
+    VERIFY_CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $ACCESS_TOKEN" http://$HOST:3001/api/auth/verify)
     if [ "$VERIFY_CODE" = "200" ]; then
         echo -e "Testing: Token Verification... ${GREEN}✓ PASS${NC}"
         ((PASSED++))
@@ -163,7 +175,7 @@ echo -e "${BLUE}Test Suite 3: Chat Functionality${NC}"
 
 if [ -n "$ACCESS_TOKEN" ]; then
     # Test First Message (Greeting)
-    CHAT_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST http://localhost:3001/api/chat \
+    CHAT_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST http://$HOST:3001/api/chat \
       -H "Authorization: Bearer $ACCESS_TOKEN" \
       -H "Content-Type: application/json" \
       -d '{"message":"Hello","isFirstMessage":true}')
@@ -184,7 +196,7 @@ if [ -n "$ACCESS_TOKEN" ]; then
 
     # Test Knowledge Query (if ChromaDB is running)
     if [ "$HTTP_CODE" = "200" ]; then
-        CHAT_RESPONSE2=$(curl -s -w "\n%{http_code}" -X POST http://localhost:3001/api/chat \
+        CHAT_RESPONSE2=$(curl -s -w "\n%{http_code}" -X POST http://$HOST:3001/api/chat \
           -H "Authorization: Bearer $ACCESS_TOKEN" \
           -H "Content-Type: application/json" \
           -d '{"message":"How do I apply for debris removal?","isFirstMessage":false}')
@@ -212,11 +224,11 @@ echo ""
 echo -e "${BLUE}Test Suite 4: Billing${NC}"
 
 # Test Get Plans (no auth required)
-run_test "Get Billing Plans" "curl -f http://localhost:3001/api/billing/plans"
+run_test "Get Billing Plans" "curl -f http://$HOST:3001/api/billing/plans"
 
 # Test Get Subscription (requires auth)
 if [ -n "$ACCESS_TOKEN" ]; then
-    SUB_CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $ACCESS_TOKEN" http://localhost:3001/api/billing/subscription)
+    SUB_CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $ACCESS_TOKEN" http://$HOST:3001/api/billing/subscription)
     if [ "$SUB_CODE" = "200" ] || [ "$SUB_CODE" = "404" ]; then
         echo -e "Testing: Get User Subscription... ${GREEN}✓ PASS${NC}"
         ((PASSED++))
@@ -227,7 +239,7 @@ if [ -n "$ACCESS_TOKEN" ]; then
     ((TOTAL++))
 
     # Test Usage Stats
-    USAGE_CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $ACCESS_TOKEN" http://localhost:3001/api/billing/usage)
+    USAGE_CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $ACCESS_TOKEN" http://$HOST:3001/api/billing/usage)
     if [ "$USAGE_CODE" = "200" ] || [ "$USAGE_CODE" = "404" ]; then
         echo -e "Testing: Get Usage Statistics... ${GREEN}✓ PASS${NC}"
         ((PASSED++))
@@ -246,8 +258,8 @@ echo ""
 
 echo -e "${BLUE}Test Suite 5: Documents${NC}"
 
-run_test "List Documents" "curl -f http://localhost:3001/api/documents"
-run_test "Search Documents" "curl -f 'http://localhost:3001/api/documents?search=test&limit=10'"
+run_test "List Documents" "curl -f http://$HOST:3001/api/documents"
+run_test "Search Documents" "curl -f 'http://$HOST:3001/api/documents?search=test&limit=10'"
 
 echo ""
 
@@ -258,7 +270,7 @@ echo ""
 echo -e "${BLUE}Test Suite 6: Security${NC}"
 
 # Test SQL Injection Prevention
-SQL_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:3001/api/auth/login \
+SQL_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://$HOST:3001/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"admin\" OR \"1\"=\"1","password":"anything"}')
 
@@ -272,7 +284,7 @@ fi
 ((TOTAL++))
 
 # Test XSS Prevention (register with script tag)
-XSS_RESPONSE=$(curl -s -X POST http://localhost:3001/api/auth/register \
+XSS_RESPONSE=$(curl -s -X POST http://$HOST:3001/api/auth/register \
   -H "Content-Type: application/json" \
   -d "{
     \"email\": \"xss-test-${TIMESTAMP}@example.com\",
@@ -294,7 +306,7 @@ fi
 ((TOTAL++))
 
 # Test Invalid Email Format
-INVALID_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:3001/api/auth/register \
+INVALID_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://$HOST:3001/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{"email":"not-an-email","password":"Test1234!","name":"Test"}')
 
@@ -308,7 +320,7 @@ fi
 ((TOTAL++))
 
 # Test Weak Password
-WEAK_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:3001/api/auth/register \
+WEAK_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://$HOST:3001/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{"email":"weak@example.com","password":"123","name":"Test"}')
 
