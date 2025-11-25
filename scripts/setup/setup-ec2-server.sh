@@ -47,22 +47,6 @@ echo "📦 Installing Node.js..."
 curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
 sudo apt-get install -y nodejs
 
-# Install PM2 globally
-echo "📦 Installing PM2..."
-sudo npm install -g pm2
-
-# Clone repository
-echo "📥 Cloning repository..."
-cd /home/ubuntu
-if [ -d "Aldeia_Chatbot_Combined" ]; then
-  echo "Repository already exists, pulling latest changes..."
-  cd Aldeia_Chatbot_Combined
-  git pull origin main
-else
-  git clone https://github.com/superthinks001/Aldeia_Chatbot_Combined.git
-  cd Aldeia_Chatbot_Combined
-fi
-
 # Set ownership
 sudo chown -R ubuntu:ubuntu /home/ubuntu/Aldeia_Chatbot_Combined
 
@@ -71,8 +55,4 @@ echo "✅ Setup complete!"
 echo ""
 echo "Next steps:"
 echo "1. Log out and back in for Docker group changes to take effect"
-echo "2. Configure environment variables in apps/backend/.env"
-echo "3. Configure environment variables in apps/chatbot-frontend/.env"
-echo "4. Start Docker services: docker compose -f docker-compose.dev.yml up -d"
-echo "5. Start backend and frontend applications"
 echo ""

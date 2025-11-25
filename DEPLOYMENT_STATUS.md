@@ -40,38 +40,36 @@ ssh -i ~/.ssh/aldeia-staging.pem ubuntu@18.217.67.150
 
 **Note**: If you get "Connection refused", wait another minute and try again.
 
-### Step 2: Run Setup Script
+### Step 2: Copy setup scripts 
 
-Once connected to the EC2 instance:
+** Upload the local script**:
 
+From your local machine (in a new terminal), - assuming you are at Aldeia's root folder
 ```bash
-# Download and run the setup script
-curl -O https://raw.githubusercontent.com/superthinks001/Aldeia_Chatbot_Combined/main/setup-ec2-server.sh
-chmod +x setup-ec2-server.sh
-./setup-ec2-server.sh
-```
-
-**OR upload the local script**:
-
-From your local machine (in a new terminal):
-```bash
-scp -i ~/.ssh/aldeia-staging.pem setup-ec2-server.sh ubuntu@18.217.67.150:~/
+scp -i ~/.ssh/aldeia-staging.pem ./scripts/setup/setup-ec2-server.sh ubuntu@18.217.67.150:~/
+scp -i ~/.ssh/aldeia-staging.pem ./scripts/deployment/deploy-chromadb.sh ubuntu@18.217.67.150:~/
+scp -i ~/.ssh/aldeia-staging.pem ./scripts/deployment/deploy-redis.sh ubuntu@18.217.67.150:~/
 ```
 
 Then on EC2:
 ```bash
 chmod +x setup-ec2-server.sh
+chmod +x deploy-chromadb.sh
+chmod +x deploy-redis.sh
+```
+
+### Step 3: Run the EC2 setup scripts 
+
+Still on EC2:
+```bash
 ./setup-ec2-server.sh
 ```
 
 This will install:
 - Docker and Docker Compose
 - Node.js 18.x
-- PM2 process manager
-- Clone your repository
-- All system dependencies
 
-### Step 3: Log Out and Back In
+### Step 4: Log Out and Back In
 
 After the setup script completes:
 
@@ -79,97 +77,25 @@ After the setup script completes:
 exit
 ssh -i ~/.ssh/aldeia-staging.pem ubuntu@18.217.67.150
 ```
-
 This is necessary for Docker group permissions to take effect.
 
-### Step 4: Configure Environment Variables
-
-#### Backend Environment
+### Step 5: Install ChromaDB and Redis
 
 ```bash
-cd ~/Aldeia_Chatbot_Combined/apps/backend
-nano .env
+./deploy-redis.sh start
+./deploy-chromadb.sh start
 ```
 
-**Required Variables** (replace with your actual values):
+Verify services are running
 
 ```bash
-# === SERVER ===
-NODE_ENV=staging
-PORT=3001
-FRONTEND_URL=http://18.217.67.150:3000
-
-# === DATABASE (Supabase) ===
-DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@YOUR_PROJECT.supabase.co:5432/postgres
-SUPABASE_URL=https://YOUR_PROJECT.supabase.co
-SUPABASE_ANON_KEY=YOUR_ANON_KEY
-SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVICE_ROLE_KEY
-
-# === AUTHENTICATION (Generate with: openssl rand -base64 64) ===
-JWT_SECRET=YOUR_GENERATED_64_CHAR_SECRET
-JWT_REFRESH_SECRET=YOUR_GENERATED_DIFFERENT_64_CHAR_SECRET
-SESSION_SECRET=YOUR_GENERATED_32_CHAR_SECRET
-
-# === REDIS (Local Docker) ===
-REDIS_URL=redis://redis:6379
-REDIS_PASSWORD=
-
-# === CHROMADB (Local Docker) ===
-CHROMA_HOST=chromadb
-CHROMA_PORT=8000
-
-# === STRIPE ===
-STRIPE_SECRET_KEY=YOUR_STRIPE_SECRET_KEY
-STRIPE_PUBLISHABLE_KEY=YOUR_STRIPE_PUBLISHABLE_KEY
-STRIPE_WEBHOOK_SECRET=YOUR_WEBHOOK_SECRET
-
-# === GOOGLE TRANSLATE ===
-GOOGLE_TRANSLATE_API_KEY=YOUR_GOOGLE_API_KEY
-
-# === ANTHROPIC ===
-ANTHROPIC_API_KEY=YOUR_ANTHROPIC_API_KEY
-
-# === CORS ===
-CORS_ORIGIN=http://18.217.67.150:3000
-```
-
-**Generate secrets** on EC2:
-```bash
-openssl rand -base64 64  # For JWT_SECRET
-openssl rand -base64 64  # For JWT_REFRESH_SECRET
-openssl rand -base64 32  # For SESSION_SECRET
-```
-
-#### Frontend Environment
-
-```bash
-cd ~/Aldeia_Chatbot_Combined/apps/chatbot-frontend
-nano .env
-```
-
-```bash
-REACT_APP_API_URL=http://18.217.67.150:3001
-REACT_APP_STRIPE_PUBLISHABLE_KEY=YOUR_STRIPE_PUBLISHABLE_KEY
-```
-
-### Step 5: Start Docker Services
-
-```bash
-cd ~/Aldeia_Chatbot_Combined
-docker compose -f docker-compose.dev.yml up -d
-
-# Verify services are running
-docker compose -f docker-compose.dev.yml ps
-```
-
-Expected output:
-```
-NAME                    STATUS
-aldeia-redis-dev        Up (healthy)
-aldeia-chromadb-dev     Up (healthy)
+./deploy-redis.sh status
+./deploy-chromadb.sh status
 ```
 
 ### Step 6: Ingest Documents into ChromaDB
+
+*** Review the below - it's incorrect because the scripts and documents weren't copied ***
 
 ```bash
 cd ~/Aldeia_Chatbot_Combined/apps/backend
@@ -179,34 +105,7 @@ npm run ingest:docs
 
 Wait for completion (processes 20 PDFs, creates 169 chunks).
 
-### Step 7: Start Backend Application
-
-```bash
-cd ~/Aldeia_Chatbot_Combined/apps/backend
-pm2 start npm --name "aldeia-backend" -- run dev
-pm2 logs aldeia-backend  # Watch logs
-```
-
-Press `Ctrl+C` to exit logs view.
-
-### Step 8: Build and Start Frontend
-
-```bash
-cd ~/Aldeia_Chatbot_Combined/apps/chatbot-frontend
-npm install
-npm run build
-pm2 start npx --name "aldeia-frontend" -- serve -s build -l 3000
-```
-
-### Step 9: Save PM2 Configuration
-
-```bash
-pm2 save
-pm2 startup
-# Run the command it outputs (starts with sudo)
-```
-
-### Step 10: Verify Deployment
+### Step 7: Verify Deployment
 
 #### From EC2 Instance:
 
@@ -230,18 +129,6 @@ curl http://18.217.67.150:3001/api/health
 http://18.217.67.150:3000
 ```
 
-**Register a Test User**:
-```bash
-curl -X POST http://18.217.67.150:3001/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email":"test@example.com",
-    "password":"Test1234!",
-    "name":"Test User",
-    "county":"LA County"
-  }'
-```
-
 ---
 
 ## 🎯 Application URLs
@@ -256,35 +143,11 @@ Once deployment is complete:
 
 ## 🔧 Maintenance Commands
 
-### View Logs
+### Run the deploy scrips with the 'help' parameters to check available options such as logs, update, restart, etc.
 ```bash
-pm2 logs aldeia-backend
-pm2 logs aldeia-frontend
-docker compose -f docker-compose.dev.yml logs
+./deploy-chromadb.sh help
+./deploy-redis.sh help
 ```
-
-### Restart Services
-```bash
-pm2 restart aldeia-backend
-pm2 restart aldeia-frontend
-docker compose -f docker-compose.dev.yml restart
-```
-
-### Update Application
-```bash
-cd ~/Aldeia_Chatbot_Combined
-git pull origin main
-cd apps/backend && npm install && pm2 restart aldeia-backend
-cd ../chatbot-frontend && npm install && npm run build && pm2 restart aldeia-frontend
-```
-
-### Monitor System
-```bash
-pm2 status
-htop  # Press 'q' to exit
-docker stats
-```
-
 ---
 
 ## 💰 Monthly Cost Estimate
