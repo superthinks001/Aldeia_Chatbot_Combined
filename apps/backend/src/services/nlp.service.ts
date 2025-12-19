@@ -199,13 +199,36 @@ export function classifyIntent(message: string, context?: any): IntentResult {
     .filter(([_, score]) => score > 0.2); // Filter out very low scores
 
   if (sortedIntents.length === 0) {
+    // Even if no intents match, try to infer from message content
+    const lowerMessage = message.toLowerCase();
+    let inferredIntent = 'information';
+    let inferredConfidence = 0.5;
+    
+    // Try to infer intent from keywords even if patterns didn't match
+    if (lowerMessage.includes('rebuild') || lowerMessage.includes('rebuilding') || lowerMessage.includes('construction')) {
+      inferredIntent = 'process';
+      inferredConfidence = 0.6;
+    } else if (lowerMessage.includes('permit') || lowerMessage.includes('application') || lowerMessage.includes('apply')) {
+      inferredIntent = 'process';
+      inferredConfidence = 0.6;
+    } else if (lowerMessage.includes('status') || lowerMessage.includes('check') || lowerMessage.includes('update')) {
+      inferredIntent = 'status';
+      inferredConfidence = 0.6;
+    } else if (lowerMessage.includes('cost') || lowerMessage.includes('price') || lowerMessage.includes('money') || lowerMessage.includes('financial')) {
+      inferredIntent = 'financial';
+      inferredConfidence = 0.6;
+    } else if (lowerMessage.includes('where') || lowerMessage.includes('location') || lowerMessage.includes('address')) {
+      inferredIntent = 'location';
+      inferredConfidence = 0.6;
+    }
+    
     return {
-      primaryIntent: 'information',
+      primaryIntent: inferredIntent,
       secondaryIntents: [],
-      confidence: 0.4,
+      confidence: inferredConfidence,
       entities: extractEntities(message, context),
-      requiresClarification: true,
-      suggestedClarifications: ['What would you like to know?', 'How can I help you?']
+      requiresClarification: inferredConfidence < 0.4,
+      suggestedClarifications: undefined
     };
   }
 
@@ -286,18 +309,18 @@ export function extractEntities(message: string, context?: any): IntentResult['e
  * Detect if query is ambiguous
  */
 function detectAmbiguity(message: string, primaryIntent: string, confidence: number, secondaryIntents: string[]): boolean {
-  // Low confidence threshold
-  if (confidence < 0.65) return true;
+  // Lower confidence threshold - only mark as ambiguous if very low confidence
+  if (confidence < 0.4) return true;
 
-  // Very short messages
-  if (message.split(' ').length < 3) return true;
+  // Very short messages (only 1-2 words)
+  if (message.trim().split(/\s+/).length < 2) return true;
 
-  // Multiple high-scoring intents (conflict)
-  if (secondaryIntents.length >= 2 && confidence < 0.80) return true;
+  // Multiple high-scoring intents (conflict) - only if confidence is very low
+  if (secondaryIntents.length >= 2 && confidence < 0.60) return true;
 
-  // Vague language
-  const vaguePatterns = [/thing|stuff|info|information|details|something|anything/i];
-  if (vaguePatterns.some(p => p.test(message)) && message.split(' ').length < 6) return true;
+  // Vague language - only if very short AND vague
+  const vaguePatterns = [/^what|^how|^tell|^give/i];
+  if (vaguePatterns.some(p => p.test(message.trim())) && message.split(' ').length < 4) return true;
 
   return false;
 }
