@@ -146,6 +146,102 @@ function formatResponse(answer: string, source: string, bias: boolean): string {
   return response;
 }
 
+// Generate intent-based response when no document matches are found
+function generateIntentBasedResponse(intent: string, message: string, entities: any): string {
+  const intentResponses: Record<string, string> = {
+    process: `Based on your question about "${message}", here's a general overview of the rebuilding process:
+
+**For fire recovery and rebuilding in LA County, you typically need to:**
+
+1. **Initial Assessment**: Contact your local fire recovery office or FEMA for damage assessment
+2. **Debris Removal**: Coordinate debris removal (may be handled by county or require private contractor)
+3. **Permits**: Obtain necessary building permits from your local building department
+4. **Inspections**: Schedule required inspections at various stages of rebuilding
+5. **Final Approval**: Complete final inspections and obtain occupancy permits
+
+${entities?.location ? `**For ${entities.location.charAt(0).toUpperCase() + entities.location.slice(1)} specifically:**\n- Contact your local building department for area-specific requirements\n- Check with your local fire department for fire safety regulations\n- Verify any HOA or local zoning requirements\n\n` : ''}**Important Resources:**
+- LA County Building and Safety: (213) 482-7000
+- FEMA Disaster Assistance: 1-800-621-3362
+- LA County Office of Emergency Management: (323) 890-4000
+
+Would you like more specific information about any of these steps?`,
+    
+    status: `To check the status of your fire recovery application or request, you can:
+
+1. Contact your local fire recovery office directly
+2. Check online portals if available for your county
+3. Call the FEMA helpline for federal assistance status
+4. Contact your insurance company for claim status
+
+Could you provide more details about what specific status you're checking?`,
+    
+    financial: `For financial assistance related to fire recovery, there are several options:
+
+1. **FEMA Assistance**: Federal emergency assistance programs
+2. **Insurance Claims**: Work with your insurance provider
+3. **State/Local Grants**: Check with LA County for local assistance programs
+4. **Non-profit Organizations**: Various charities provide fire recovery aid
+
+Would you like more information about any of these options?`,
+    
+    location: `For fire recovery information in ${entities?.location ? entities.location.charAt(0).toUpperCase() + entities.location.slice(1) : 'LA County'}:
+
+${entities?.location?.toLowerCase().includes('altadena') ? `**For Altadena specifically:**
+- Altadena is served by LA County services
+- Contact the LA County Office of Emergency Management at (323) 890-4000
+- Visit the LA County Fire Department for local fire recovery resources
+- Check with the Altadena Community Center for local assistance programs
+
+**Rebuilding in Altadena:**
+- Building permits are handled through LA County Building and Safety
+- Contact (213) 482-7000 for permit information
+- You may need to coordinate with both LA County and any local HOA requirements
+- Consider consulting with a local contractor familiar with Altadena building codes
+
+` : entities?.location?.toLowerCase().includes('pasadena') ? `**For Pasadena specifically:**
+- Contact Pasadena City Hall at (626) 744-4000
+- Building permits: Pasadena Building and Safety Division
+- Fire Department: (626) 744-4655
+- Visit pasadena.gov for official fire recovery resources
+
+` : `- **LA County Fire Recovery**: Contact the LA County Office of Emergency Management
+- **Pasadena**: Contact Pasadena City Hall or the fire department  
+- **Altadena**: Check with LA County services
+
+`}You can also visit the official LA County fire recovery website for the most up-to-date information and office locations.`,
+    
+    emergency: `If this is an emergency, please call 911 immediately.
+
+For urgent fire recovery assistance:
+- **Emergency Services**: 911
+- **FEMA Disaster Assistance**: 1-800-621-3362
+- **LA County Emergency**: Check local emergency services
+
+For non-emergency fire recovery questions, I'm here to help with information about permits, debris removal, rebuilding processes, and recovery resources.`,
+    
+    legal: `For legal questions about fire recovery:
+
+1. **Legal Aid Organizations**: Contact local legal aid services
+2. **Insurance Disputes**: Consult with an attorney specializing in insurance law
+3. **Permit Issues**: Contact your local building department
+4. **Rights and Regulations**: Review LA County fire recovery regulations
+
+I recommend consulting with a qualified attorney for specific legal advice. Would you like general information about fire recovery regulations?`
+  };
+
+  // Return intent-specific response or generic helpful response
+  const response = intentResponses[intent] || `I understand you're asking about "${message}". While I don't have specific documents matching your question, I can help you with:
+
+- Fire recovery processes and procedures
+- Debris removal information
+- Rebuilding permits and inspections
+- Recovery resources and assistance programs
+
+Could you provide more details about what specific information you need? This will help me give you a more targeted answer.`;
+
+  return response;
+}
+
 // Helper: Generate clarification options based on message and context
 function generateClarificationOptions(message: string, context: any): string[] {
   const msg = message.toLowerCase();
@@ -282,12 +378,11 @@ router.post('/', async (req: Request, res: Response) => {
     }
     // Note: collection (ChromaDB) is optional - fallback logic exists below
     
-    // If ambiguous, return a clarifying prompt with friendly tone
-    if (ambiguous) {
-      // Use enhanced NLP clarifications if available
-      const clarificationText = intentResult.suggestedClarifications && intentResult.suggestedClarifications.length > 0
-        ? intentResult.suggestedClarifications[0]
-        : "I'd love to help you, but I'm not quite sure what you're asking. Could you please provide more details or rephrase your question? I'm here to assist with fire recovery information, permits, debris removal, rebuilding processes, and more.";
+    // If ambiguous, still try to provide helpful response based on intent
+    // Only skip to clarification if confidence is extremely low (< 0.3)
+    if (ambiguous && intentResult.confidence < 0.3) {
+      // Only for very unclear messages, ask for clarification
+      const clarificationText = "I'd love to help you, but I'm not quite sure what you're asking. Could you please provide more details? For example:\n\n- Are you asking about the rebuilding process?\n- Do you need information about permits?\n- Are you looking for debris removal services?\n- Do you need financial assistance information?\n\nPlease provide more details and I'll be happy to help!";
 
       // Add bot clarification to history
       convContext.history.push({ sender: 'bot', text: clarificationText });
@@ -308,9 +403,6 @@ router.post('/', async (req: Request, res: Response) => {
         });
       }
 
-      // Use enhanced clarification options
-      const clarificationOptions = intentResult.suggestedClarifications || generateClarificationOptions(message, convContext);
-
       return res.json({
         response: clarificationText,
         confidence: intentResult.confidence,
@@ -324,10 +416,10 @@ router.post('/', async (req: Request, res: Response) => {
         secondaryIntents: intentResult.secondaryIntents,
         entities,
         ambiguous: true,
-        history: convContext.history,
-        clarificationOptions
+        history: convContext.history
       });
     }
+    // If ambiguous but confidence >= 0.3, continue with intent-based response below
     
     // Generate embedding for the user message, including last N turns as context
     let contextText = '';
@@ -364,15 +456,39 @@ router.post('/', async (req: Request, res: Response) => {
     }
     // Check if the top match is good enough
     if (!matches.length || matches[0].distance === undefined || matches[0].distance > 2.0) {
+      // Generate intent-based response when no good matches found
+      const intentBasedResponse = generateIntentBasedResponse(intent, message, entities);
+      
+      // Add to conversation history
+      convContext.history.push({ sender: 'bot', text: intentBasedResponse });
+      if (conversationId) conversationContexts[conversationId] = convContext;
+      
+      // Store in database if conversation exists
+      if (conversation && conversationId) {
+        await ConversationsService.addMessage(conversationId, 'user', message, {
+          intent,
+          intentConfidence: intentResult.confidence,
+          entities
+        });
+        await ConversationsService.addMessage(conversationId, 'bot', intentBasedResponse, {
+          intent,
+          confidence: 0.6,
+          grounded: false
+        });
+      }
+      
       return res.json({
-        response: "I'm sorry, but I couldn't find specific information about that in our official documents. This could be because the information isn't available yet, or you might want to try rephrasing your question. I'm here to help with fire recovery topics like debris removal, rebuilding permits, inspections, and recovery resources.",
-        confidence: 0.5,
+        response: intentBasedResponse,
+        confidence: 0.6,
         bias,
         uncertainty: true,
         context: context || null,
         grounded: false,
-        hallucination: true,
-        intent
+        hallucination: false,
+        intent,
+        intentConfidence: intentResult.confidence,
+        entities,
+        history: convContext.history
       });
     }
     // Calculate confidence: 1 - (distance / 2.0), clamp 0-1
