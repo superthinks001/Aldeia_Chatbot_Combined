@@ -48,12 +48,14 @@ const INTENT_PATTERNS = {
     minConfidence: 0.75
   },
   process: {
-    keywords: ['how', 'process', 'steps', 'procedure', 'apply', 'application', 'submit', 'get', 'obtain', 'rebuild', 'remove', 'opt-out', 'permit', 'inspection', 'documentation', 'form', 'paperwork'],
+    keywords: ['how', 'process', 'steps', 'procedure', 'apply', 'application', 'submit', 'get', 'obtain', 'rebuild', 'remove', 'removal', 'debris', 'opt-out', 'permit', 'inspection', 'documentation', 'form', 'paperwork', 'cleanup', 'clearing', 'haul', 'demolition', 'abatement'],
     patterns: [
       /how\s+(do|can|should)\s+i/i,
       /what\s+(are\s+the\s+)?steps/i,
       /application\s+process/i,
-      /how\s+to\s+(apply|get|obtain)/i,
+      /how\s+to\s+(apply|get|obtain|start)/i,
+      /debris\s+removal/i,
+      /(apply|sign up)\s+for/i,
     ],
     weight: 0.9,
     minConfidence: 0.75
@@ -176,11 +178,11 @@ export function classifyIntent(message: string, context?: any): IntentResult {
 
     // Keyword matching (weighted)
     const keywordMatches = config.keywords.filter(keyword => msg.includes(keyword.toLowerCase()));
-    score += (keywordMatches.length / config.keywords.length) * 0.5;
+    score += (keywordMatches.length / config.keywords.length) * 0.3;
 
-    // Pattern matching (weighted)
+    // Pattern matching (weighted) - more important than keywords
     const patternMatches = config.patterns.filter(pattern => pattern.test(msg));
-    score += (patternMatches.length / config.patterns.length) * 0.5;
+    score += (patternMatches.length / config.patterns.length) * 0.7;
 
     // Apply intent weight
     score *= config.weight;
@@ -309,8 +311,8 @@ export function extractEntities(message: string, context?: any): IntentResult['e
  * Detect if query is ambiguous
  */
 function detectAmbiguity(message: string, primaryIntent: string, confidence: number, secondaryIntents: string[]): boolean {
-  // Lower confidence threshold - only mark as ambiguous if very low confidence
-  if (confidence < 0.4) return true;
+  // Low confidence threshold - lowered to be less aggressive
+  if (confidence < 0.35) return true;
 
   // Very short messages (only 1-2 words)
   if (message.trim().split(/\s+/).length < 2) return true;

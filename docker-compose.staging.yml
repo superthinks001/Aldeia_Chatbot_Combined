@@ -1,123 +1,145 @@
+# ============================================
+# ALDEIA CHATBOT - STAGING DOCKER COMPOSE
+# ============================================
+# This file orchestrates backend and frontend services for staging
+#
+# PREREQUISITES:
+# - Redis must be running (use scripts/deployment/deploy-redis.sh)
+# - ChromaDB must be running (use scripts/deployment/deploy-chromadb.sh)
+# - Supabase must be accessible
+#
+# Uses pre-built images from GitHub Container Registry
+# ============================================
+
 services:
-  # ==========================================================================
-  # BACKEND API SERVICE (STAGING)
-  # ==========================================================================
+  # ============================================
+  # BACKEND API SERVICE
+  # ============================================
   backend:
-    build:
-      context: ./apps/backend
-      dockerfile: Dockerfile
-      target: development
+    image: ghcr.io/${GITHUB_REPOSITORY_LOWER:-superthinks001/aldeia_chatbot_combined}/backend:staging
     container_name: aldeia-backend-staging
     restart: unless-stopped
+    ports:
+      - "3001:3001"
     environment:
       - NODE_ENV=staging
-      - PORT=3001
-      - DB_PATH=/app/data/aldeia.db
-      - DOCUMENTS_PATH=/app/data/documents
-      - JWT_SECRET=${JWT_SECRET_STAGING}
-      - LOG_LEVEL=debug
-    volumes:
-      - ./data:/app/data:rw
-      - ./logs:/app/logs:rw
-      - ./apps/backend/src:/app/src:ro
-    networks:
-      - aldeia-staging-network
+      - PORT=${BACKEND_PORT:-3001}
+      - DATABASE_URL=${DATABASE_URL}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+      - JWT_EXPIRATION=${JWT_EXPIRATION:-24h}
+      - JWT_REFRESH_EXPIRATION=${JWT_REFRESH_EXPIRATION:-30d}
+      # ChromaDB - connects to standalone container
+      - CHROMA_HOST=${CHROMA_HOST:-aldeia-chromadb}
+      - CHROMA_PORT=${CHROMA_PORT:-8000}
+      - CHROMA_AUTH_TOKEN=${CHROMA_AUTH_TOKEN}
+      # Redis - connects to standalone container
+      - REDIS_URL=${REDIS_URL:-redis://aldeia-redis:6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - GOOGLE_TRANSLATE_API_KEY=${GOOGLE_TRANSLATE_API_KEY}
+      - FRONTEND_CHAT_URL=${FRONTEND_CHAT_URL}
+      - FRONTEND_REBUILD_URL=${FRONTEND_REBUILD_URL:-}
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      - SENTRY_DSN=${SENTRY_DSN}
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
+      - ENABLE_MONITORING=${ENABLE_MONITORING:-true}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    networks:
+      - aldeia-network
+    volumes:
+      - ./logs/backend:/app/logs
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
-  # ==========================================================================
-  # CHATBOT FRONTEND SERVICE (STAGING)
-  # ==========================================================================
+  # ============================================
+  # CHATBOT FRONTEND SERVICE
+  # ============================================
   chatbot-frontend:
-    build:
-      context: ./apps/chatbot-frontend
-      dockerfile: Dockerfile
-      target: development
-    container_name: aldeia-chatbot-staging
-    restart: unless-stopped
-    environment:
-      - NODE_ENV=staging
-      - NEXT_PUBLIC_API_URL=https://api-staging.aldeia.com
-    volumes:
-      - ./apps/chatbot-frontend/src:/app/src:ro
-    depends_on:
-      - backend
-    networks:
-      - aldeia-staging-network
-
-  # ==========================================================================
-  # REBUILD PLATFORM SERVICE (STAGING)
-  # ==========================================================================
-  rebuild-platform:
-    build:
-      context: ./apps/rebuild-platform
-      dockerfile: Dockerfile
-      target: development
-    container_name: aldeia-rebuild-staging
-    restart: unless-stopped
-    environment:
-      - NODE_ENV=staging
-      - NEXT_PUBLIC_API_URL=https://api-staging.aldeia.com
-      - NEXT_PUBLIC_CHATBOT_URL=https://chatbot-staging.aldeia.com
-    volumes:
-      - ./apps/rebuild-platform/src:/app/src:ro
-    depends_on:
-      - backend
-    networks:
-      - aldeia-staging-network
-
-  # ==========================================================================
-  # NGINX REVERSE PROXY (STAGING)
-  # ==========================================================================
-  nginx:
-    image: nginx:alpine
-    container_name: aldeia-nginx-staging
+    image: ghcr.io/${GITHUB_REPOSITORY_LOWER:-superthinks001/aldeia_chatbot_combined}/chatbot-frontend:staging
+    container_name: aldeia-chatbot-frontend-staging
     restart: unless-stopped
     ports:
-      - "8080:80"
-      - "8443:443"
-    volumes:
-      - ./nginx/nginx.staging.conf:/etc/nginx/nginx.conf:ro
-      - ./logs/nginx:/var/log/nginx:rw
-    depends_on:
-      - backend
-      - chatbot-frontend
-      - rebuild-platform
+      - "3000:3002"
+    environment:
+      - NODE_ENV=staging
+      - BACKEND_URL=${BACKEND_URL:-http://backend:3001}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3002/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
     networks:
-      - aldeia-staging-network
+      - aldeia-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
 
-  # ==========================================================================
-  # DATABASE BACKUP SERVICE
-  # ==========================================================================
-  db-backup:
-    image: alpine:latest
-    container_name: aldeia-backup-staging
-    restart: "no"
-    volumes:
-      - ./data:/app/data:ro
-      - ./backups:/app/backups:rw
-    command: |
-      sh -c "
-        apk add --no-cache sqlite &&
-        mkdir -p /app/backups &&
-        sqlite3 /app/data/aldeia.db '.backup /app/backups/aldeia_backup_$(date +%Y%m%d_%H%M%S).db' &&
-        find /app/backups -name '*.db' -mtime +7 -delete
-      "
-    networks:
-      - aldeia-staging-network
-
-# =============================================================================
+# ============================================
 # NETWORKS
-# =============================================================================
+# ============================================
 networks:
-  aldeia-staging-network:
-    driver: bridge
+  aldeia-network:
+    external: true
+    name: aldeia-network
 
-# =============================================================================
-# VOLUMES
-# =============================================================================
-volumes:
-  staging-logs:
+# ============================================
+# STAGING DEPLOYMENT NOTES:
+# ============================================
+# PREREQUISITES - Run these BEFORE deploying:
+#
+# 1. Deploy infrastructure services (run once):
+#    export REDIS_PASSWORD='your-redis-password'
+#    export CHROMA_AUTH_TOKEN='your-chroma-token'
+#    ./scripts/deployment/deploy-redis.sh start
+#    ./scripts/deployment/deploy-chromadb.sh start
+#
+# 2. Verify infrastructure is healthy:
+#    ./scripts/deployment/deploy-redis.sh status
+#    ./scripts/deployment/deploy-chromadb.sh status
+#
+# 3. Deploy application:
+#    docker compose -f docker-compose.staging.yml pull
+#    docker compose -f docker-compose.staging.yml up -d
+#
+# Required environment variables (set in .env file):
+# - GITHUB_REPOSITORY_LOWER (auto-set by workflow)
+# - DATABASE_URL
+# - SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
+# - JWT_SECRET, JWT_REFRESH_SECRET
+# - CHROMA_AUTH_TOKEN
+# - REDIS_PASSWORD
+# - STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET (can be test keys)
+# - CORS_ORIGINS
+# ============================================
