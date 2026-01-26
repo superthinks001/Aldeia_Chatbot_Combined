@@ -1,16 +1,22 @@
-name: CD - Deploy to Production
+name: CD - Deploy
 
 # ============================================
 # CONTINUOUS DEPLOYMENT WORKFLOW
 # ============================================
+# Deploys to staging on development branch
 # Deploys to production on main branch
-# Builds and pushes Docker images to registry
-# Deploys via SSH to production server
+#
+# PREREQUISITES (must be running on server):
+# - Redis (deployed via scripts/deployment/deploy-redis.sh)
+# - ChromaDB (deployed via scripts/deployment/deploy-chromadb.sh)
+# - Supabase (cloud service)
+#
+# This workflow only handles backend and frontend deployment
 # ============================================
 
 on:
   push:
-    branches: [main]
+    branches: [main, development]
     paths-ignore:
       - '**.md'
       - 'docs/**'
@@ -20,7 +26,7 @@ on:
       environment:
         description: 'Deployment environment'
         required: true
-        default: 'production'
+        default: 'staging'
         type: choice
         options:
           - production
@@ -29,15 +35,50 @@ on:
 env:
   NODE_VERSION: '18'
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  # ============================================
+  # DETERMINE ENVIRONMENT
+  # ============================================
+  setup:
+    name: Setup Deployment
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.set-env.outputs.environment }}
+      compose_file: ${{ steps.set-env.outputs.compose_file }}
+    steps:
+      - name: Determine environment
+        id: set-env
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
+            if [ "${{ github.event.inputs.environment }}" == "production" ]; then
+              echo "compose_file=docker-compose.production.yml" >> $GITHUB_OUTPUT
+            else
+              echo "compose_file=docker-compose.staging.yml" >> $GITHUB_OUTPUT
+            fi
+          elif [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+            echo "compose_file=docker-compose.production.yml" >> $GITHUB_OUTPUT
+          else
+            echo "environment=staging" >> $GITHUB_OUTPUT
+            echo "compose_file=docker-compose.staging.yml" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Display deployment info
+        run: |
+          echo "Deploying to: ${{ steps.set-env.outputs.environment }}"
+          echo "Using compose file: ${{ steps.set-env.outputs.compose_file }}"
+
   # ============================================
   # BUILD AND PUSH DOCKER IMAGES
   # ============================================
   build-and-push:
     name: Build & Push Docker Images
     runs-on: ubuntu-latest
+    needs: setup
+    environment:
+      name: ${{ needs.setup.outputs.environment }}
     permissions:
       contents: read
       packages: write
@@ -49,6 +90,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Set image name to lowercase
+        id: image-name
+        run: echo "IMAGE_NAME_LOWER=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -64,11 +109,12 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.service }}
+          images: ${{ env.REGISTRY }}/${{ steps.image-name.outputs.IMAGE_NAME_LOWER }}/${{ matrix.service }}
           tags: |
             type=ref,event=branch
             type=sha,prefix={{branch}}-
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=staging,enable=${{ github.ref == 'refs/heads/development' }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -81,20 +127,21 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           target: production
+          build-args: |
+            REACT_APP_API_URL=${{ matrix.service == 'chatbot-frontend' && format('http://{0}:3001/api', secrets.SERVER_HOST) || '' }}
 
       - name: Image digest
         run: echo "Image pushed with digest ${{ steps.meta.outputs.digest }}"
 
   # ============================================
-  # DEPLOY TO PRODUCTION
+  # DEPLOY TO TARGET ENVIRONMENT
   # ============================================
   deploy:
-    name: Deploy to Production
+    name: Deploy to ${{ needs.setup.outputs.environment }}
     runs-on: ubuntu-latest
-    needs: build-and-push
+    needs: [setup, build-and-push]
     environment:
-      name: ${{ github.event.inputs.environment || 'production' }}
-      url: http://${{ secrets.SERVER_HOST }}:3001
+      name: ${{ needs.setup.outputs.environment }}
 
     steps:
       - name: Checkout code
@@ -112,11 +159,12 @@ jobs:
 
       - name: Create .env file
         run: |
-          cat > .env.production << EOF
-          NODE_ENV=production
+          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          cat > .env.${{ needs.setup.outputs.environment }} << EOF
+          NODE_ENV=${{ needs.setup.outputs.environment }}
+          GITHUB_REPOSITORY_LOWER=${REPO_LOWER}
           BACKEND_PORT=3001
           CHATBOT_FRONTEND_PORT=3000
-          REBUILD_PLATFORM_PORT=3000
 
           SUPABASE_URL=${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
@@ -130,13 +178,14 @@ jobs:
 
           BACKEND_URL=http://${{ secrets.SERVER_HOST }}:3001
           FRONTEND_CHAT_URL=http://${{ secrets.SERVER_HOST }}:3000
-          FRONTEND_REBUILD_URL=http://${{ secrets.SERVER_HOST }}:3000
 
-          CHROMA_HOST=chromadb
+          # ChromaDB - connects to standalone container on aldeia-network
+          CHROMA_HOST=aldeia-chromadb
           CHROMA_PORT=8000
           CHROMA_AUTH_TOKEN=${{ secrets.CHROMA_AUTH_TOKEN }}
 
-          REDIS_URL=redis://redis:6379
+          # Redis - connects to standalone container on aldeia-network
+          REDIS_URL=redis://aldeia-redis:6379
           REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
 
           STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}
@@ -146,7 +195,7 @@ jobs:
           GOOGLE_TRANSLATE_API_KEY=${{ secrets.GOOGLE_TRANSLATE_API_KEY }}
 
           SENTRY_DSN=${{ secrets.SENTRY_DSN }}
-          LOG_LEVEL=info
+          LOG_LEVEL=${{ needs.setup.outputs.environment == 'production' && 'info' || 'debug' }}
           ENABLE_MONITORING=true
 
           ENABLE_VOICE_INPUT=true
@@ -161,84 +210,63 @@ jobs:
 
           SESSION_SECRET=${{ secrets.SESSION_SECRET }}
 
-          BACKUP_ENABLED=true
-          BACKUP_SCHEDULE=0 2 * * *
-          BACKUP_RETENTION_DAYS=30
-
           HEALTH_CHECK_INTERVAL=30000
           HEALTH_CHECK_TIMEOUT=5000
           EOF
 
-      - name: Install Docker on EC2 (if not already installed)
+      - name: Login to GitHub Container Registry on server
         run: |
-          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
-            # Check if Docker is installed
-            if ! command -v docker &> /dev/null; then
-              echo "Installing Docker..."
-              sudo apt-get update
-              sudo apt-get install -y ca-certificates curl gnupg lsb-release
-              sudo mkdir -p /etc/apt/keyrings
-              curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-              echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-              sudo apt-get update
-              sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-              sudo usermod -aG docker $USER
-              echo "Docker installed successfully"
-            else
-              echo "Docker is already installed"
-            fi
-
-            # Check if Docker Compose is installed
-            if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/null; then
-              echo "Installing Docker Compose..."
-              sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-              sudo chmod +x /usr/local/bin/docker-compose
-              echo "Docker Compose installed successfully"
-            else
-              echo "Docker Compose is already installed"
-            fi
-
-            # Log in to GitHub Container Registry
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << EOF
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
           EOF
 
       - name: Copy files to server
+        env:
+          ENVIRONMENT: ${{ needs.setup.outputs.environment }}
+          COMPOSE_FILE: ${{ needs.setup.outputs.compose_file }}
         run: |
           ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "mkdir -p ~/aldeia"
-          scp -r docker-compose.production.yml ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:~/aldeia/
+          scp ${{ needs.setup.outputs.compose_file }} ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:~/aldeia/
           scp -r nginx ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:~/aldeia/ || echo "No nginx directory to copy"
-          scp .env.production ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:~/aldeia/.env
+          scp .env.${{ needs.setup.outputs.environment }} ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:~/aldeia/.env
 
-      - name: Deploy on server
+      - name: Deploy application
+        env:
+          COMPOSE_FILE: ${{ needs.setup.outputs.compose_file }}
         run: |
-          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << EOF
             cd ~/aldeia
 
             # Pull latest images
-            docker-compose -f docker-compose.production.yml pull
+            echo "Pulling latest images..."
+            docker compose -f ${{ needs.setup.outputs.compose_file }} pull
 
-            # Stop old containers
-            docker-compose -f docker-compose.production.yml down
+            # Stop old containers (only backend and frontend)
+            echo "Stopping old containers..."
+            docker compose -f ${{ needs.setup.outputs.compose_file }} down
 
             # Start new containers
-            docker-compose -f docker-compose.production.yml up -d
+            echo "Starting new containers..."
+            docker compose -f ${{ needs.setup.outputs.compose_file }} up -d
 
             # Wait for health checks
             echo "Waiting for services to be healthy..."
             sleep 30
 
             # Check service health
-            docker-compose -f docker-compose.production.yml ps
+            docker compose -f ${{ needs.setup.outputs.compose_file }} ps
 
             # Show logs
-            docker-compose -f docker-compose.production.yml logs --tail=50
+            docker compose -f ${{ needs.setup.outputs.compose_file }} logs --tail=50
           EOF
 
       - name: Run database migrations
+        env:
+          COMPOSE_FILE: ${{ needs.setup.outputs.compose_file }}
         run: |
-          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << EOF
             cd ~/aldeia
-            docker-compose -f docker-compose.production.yml exec -T backend npm run migrate || echo "Migrations not configured"
+            docker compose -f ${{ needs.setup.outputs.compose_file }} exec -T backend npm run migrate || echo "Migrations not configured"
           EOF
 
       - name: Verify deployment
@@ -247,30 +275,34 @@ jobs:
           sleep 10
 
           # Check backend health
+          echo "Checking backend health..."
           curl -f http://${{ secrets.SERVER_HOST }}:3001/api/health || exit 1
 
           # Check frontend
+          echo "Checking frontend health..."
           curl -f http://${{ secrets.SERVER_HOST }}:3000/ || exit 1
 
-          echo "✅ Deployment verification successful!"
+          echo "Deployment verification successful!"
 
       - name: Rollback on failure
         if: failure()
+        env:
+          COMPOSE_FILE: ${{ needs.setup.outputs.compose_file }}
         run: |
-          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << EOF
             cd ~/aldeia
-            echo "⚠️ Deployment failed, rolling back..."
-            docker-compose -f docker-compose.production.yml down
-            docker-compose -f docker-compose.production.yml up -d --no-deps --build
+            echo "Deployment failed, attempting rollback..."
+            docker compose -f ${{ needs.setup.outputs.compose_file }} down
+            docker compose -f ${{ needs.setup.outputs.compose_file }} up -d
           EOF
 
       - name: Notify deployment status
         if: always()
         run: |
           if [ "${{ job.status }}" == "success" ]; then
-            echo "✅ Deployment to production successful!"
+            echo "Deployment to ${{ needs.setup.outputs.environment }} successful!"
           else
-            echo "❌ Deployment to production failed!"
+            echo "Deployment to ${{ needs.setup.outputs.environment }} failed!"
           fi
 
   # ============================================
@@ -279,7 +311,9 @@ jobs:
   post-deployment-checks:
     name: Post-Deployment Checks
     runs-on: ubuntu-latest
-    needs: deploy
+    needs: [setup, deploy]
+    environment:
+      name: ${{ needs.setup.outputs.environment }}
 
     steps:
       - name: Checkout code
@@ -287,31 +321,31 @@ jobs:
 
       - name: Run smoke tests
         run: |
-          echo "Running smoke tests..."
+          echo "Running smoke tests for ${{ needs.setup.outputs.environment }}..."
 
           # Test backend health
           response=$(curl -s -o /dev/null -w "%{http_code}" http://${{ secrets.SERVER_HOST }}:3001/api/health)
           if [ "$response" != "200" ]; then
-            echo "❌ Backend health check failed (HTTP $response)"
+            echo "Backend health check failed (HTTP $response)"
             exit 1
           fi
-          echo "✅ Backend health check passed"
+          echo "Backend health check passed"
 
           # Test frontend
           response=$(curl -s -o /dev/null -w "%{http_code}" http://${{ secrets.SERVER_HOST }}:3000/)
           if [ "$response" != "200" ]; then
-            echo "❌ Frontend check failed (HTTP $response)"
+            echo "Frontend check failed (HTTP $response)"
             exit 1
           fi
-          echo "✅ Frontend check passed"
+          echo "Frontend check passed"
 
-          echo "✅ All smoke tests passed!"
+          echo "All smoke tests passed!"
 
       - name: Performance check
         run: |
           echo "Checking API response times..."
           time curl -s http://${{ secrets.SERVER_HOST }}:3001/api/health > /dev/null
-          echo "✅ Performance check completed"
+          echo "Performance check completed"
 
   # ============================================
   # CLEANUP OLD IMAGES
@@ -319,14 +353,21 @@ jobs:
   cleanup:
     name: Cleanup Old Images
     runs-on: ubuntu-latest
-    needs: post-deployment-checks
+    needs: [setup, post-deployment-checks]
     if: success()
+    environment:
+      name: ${{ needs.setup.outputs.environment }}
 
     steps:
       - name: Setup SSH
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add server to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
 
       - name: Cleanup on server
         run: |
@@ -337,17 +378,17 @@ jobs:
             # Remove old containers
             docker container prune -f
 
-            # Remove unused volumes (careful with this!)
-            # docker volume prune -f
-
-            echo "✅ Cleanup completed"
+            echo "Cleanup completed"
           EOF
 
 # ============================================
-# REQUIRED SECRETS IN GITHUB:
+# REQUIRED GITHUB SECRETS (per environment):
 # ============================================
+# Create environments: staging, production
+# Each environment needs these secrets:
+#
 # SSH_PRIVATE_KEY - SSH private key for server access
-# SERVER_HOST - Production server hostname/IP
+# SERVER_HOST - Server hostname/IP
 # SERVER_USER - SSH username for server
 # SUPABASE_URL - Supabase project URL
 # SUPABASE_ANON_KEY - Supabase anon key
@@ -363,4 +404,9 @@ jobs:
 # GOOGLE_TRANSLATE_API_KEY - Google Translate API key
 # SENTRY_DSN - Sentry error tracking DSN
 # SESSION_SECRET - Session secret
+#
+# PREREQUISITES:
+# Before running this workflow, ensure these are running on the server:
+# 1. Redis: ./scripts/deployment/deploy-redis.sh start
+# 2. ChromaDB: ./scripts/deployment/deploy-chromadb.sh start
 # ============================================
