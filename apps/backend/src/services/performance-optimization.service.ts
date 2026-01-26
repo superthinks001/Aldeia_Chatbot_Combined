@@ -121,11 +121,13 @@ class LRUCache {
   private cache: Map<string, CacheEntry>;
   private maxSize: number; // max entries
   private maxMemory: number; // max bytes
+  private evictionCount: number = 0; // Track evictions
 
   constructor(maxSize: number = 1000, maxMemory: number = 100 * 1024 * 1024) {
     this.cache = new Map();
     this.maxSize = maxSize;
     this.maxMemory = maxMemory;
+    this.evictionCount = 0;
   }
 
   set(
@@ -225,7 +227,12 @@ class LRUCache {
     const firstKey = this.cache.keys().next().value;
     if (firstKey) {
       this.cache.delete(firstKey);
+      this.evictionCount++; // Track eviction
     }
+  }
+
+  getEvictionCount(): number {
+    return this.evictionCount;
   }
 
   private cleanupExpired(): void {
@@ -283,7 +290,7 @@ class LRUCache {
       totalSize: this.getTotalSize(),
       hitRate: totalRequests > 0 ? (totalHits / totalRequests) * 100 : 0,
       missRate: totalRequests > 0 ? ((totalRequests - totalHits) / totalRequests) * 100 : 0,
-      evictions: 0, // Would track this in production
+      evictions: cache.getEvictionCount(),
       byCategory,
       topEntries
     };
@@ -292,6 +299,32 @@ class LRUCache {
 
 // Global cache instance
 const cache = new LRUCache(2000, 150 * 1024 * 1024); // 2000 entries, 150MB max
+
+// Helper function to get actual database connections
+async function getActualDBConnections(): Promise<number> {
+  try {
+    // Query PostgreSQL to get active connections
+    // Note: This requires appropriate permissions
+    const { data, error } = await supabase.rpc('get_active_connections');
+    
+    if (error) {
+      // Fallback: Query pg_stat_activity if RPC doesn't exist
+      const { data: activityData } = await supabase
+        .from('pg_stat_activity')
+        .select('pid', { count: 'exact', head: true })
+        .eq('datname', process.env.DATABASE_NAME || 'postgres')
+        .neq('state', 'idle');
+      
+      return activityData ? (activityData as any).length : 5;
+    }
+    
+    return data || 5;
+  } catch (error) {
+    // Fallback to estimated value if query fails
+    console.warn('[PERFORMANCE] Could not get actual DB connections, using estimate');
+    return 5;
+  }
+}
 
 // ============================================================================
 // Cache Operations
@@ -589,10 +622,22 @@ export async function getPerformanceMetrics(filters: {
   // Calculate throughput
   const timeRangeHours = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60);
   const totalRequests = logs?.length || 0;
+  
+  // Calculate peak RPM from time-bucketed data
+  let peakRPM = 0;
+  if (logs && logs.length > 0) {
+    const timeBuckets = new Map<number, number>(); // Minute bucket -> request count
+    logs.forEach(log => {
+      const bucket = Math.floor(new Date(log.timestamp).getTime() / (1000 * 60)); // Minute bucket
+      timeBuckets.set(bucket, (timeBuckets.get(bucket) || 0) + 1);
+    });
+    peakRPM = Math.max(...Array.from(timeBuckets.values()), 0);
+  }
+
   const throughput = {
     requestsPerMinute: timeRangeHours > 0 ? (totalRequests / (timeRangeHours * 60)) : 0,
     requestsPerHour: timeRangeHours > 0 ? (totalRequests / timeRangeHours) : 0,
-    peakRPM: 0 // Would calculate from time-bucketed data in production
+    peakRPM: Math.round(peakRPM)
   };
 
   // Get cache stats
@@ -628,7 +673,7 @@ export async function getPerformanceMetrics(filters: {
     },
     resources: {
       cacheMemoryUsage: Math.round(cacheStats.totalSize / (1024 * 1024) * 10) / 10, // MB
-      estimatedDBConnections: 5 // Would track actual connections in production
+      estimatedDBConnections: await getActualDBConnections()
     }
   };
 }

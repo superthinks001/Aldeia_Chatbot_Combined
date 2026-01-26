@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 
-export type RebuildStep = 'landing' | 'location' | 'preferences-needs' | 'preferences-style' | 'inspiration' | 'matches' | 'details' | 'chat';
+export type RebuildStep = 'landing' | 'location' | 'preferences-needs' | 'preferences-style' | 'inspiration' | 'budget' | 'matches' | 'details' | 'chat';
 
 interface PropertyData {
   address: string;

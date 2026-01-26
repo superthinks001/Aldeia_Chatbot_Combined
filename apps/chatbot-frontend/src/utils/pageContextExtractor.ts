@@ -66,7 +66,14 @@ const TOPIC_CATEGORIES = {
   'rebuilding': ['rebuild', 'reconstruction', 'design', 'contractor', 'architect', 'renovation'],
   'safety': ['safety', 'hazard', 'toxic', 'air quality', 'health', 'danger'],
   'timeline': ['timeline', 'deadline', 'schedule', 'phase', 'when', 'date'],
-  'contact': ['contact', 'phone', 'email', 'office', 'helpline', 'support']
+  'contact': ['contact', 'phone', 'email', 'office', 'helpline', 'support'],
+  'location-confirmation': ['location', 'address', 'property', 'confirm', 'parcel', 'apn'],
+  'style-selection': ['style', 'architecture', 'design', 'original', 'new', 'upload', 'photos'],
+  'needs-selection': ['bedrooms', 'bathrooms', 'stories', 'features', 'patio', 'pool', 'basement'],
+  'inspiration': ['inspiration', 'ideas', 'images', 'gallery', 'upload', 'select'],
+  'budget': ['budget', 'insurance', 'coverage', 'cost', 'electric', 'savings'],
+  'design-matches': ['matches', 'designs', 'pre-approved', 'architect', 'match percentage'],
+  'design-details': ['details', 'floor plan', 'video', 'cost', 'architect', 'download']
 };
 
 /**

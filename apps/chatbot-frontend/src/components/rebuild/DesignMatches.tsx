@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MessageCircle, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { MessageCircle, ThumbsUp, ThumbsDown, Share2, Home } from 'lucide-react';
 import './DesignMatches.css';
 
 interface DesignMatchesProps {
@@ -72,10 +72,12 @@ const DesignMatches: React.FC<DesignMatchesProps> = ({
       {/* Header */}
       <header className="rebuild-header">
         <div className="logo">
-          <div className="logo-icon">🔥</div>
+          <div className="logo-icon">
+            <Home className="w-4 h-4 text-white" />
+          </div>
           <span className="logo-text">aldeia</span>
         </div>
-        <a href="#" className="home-link">HOME</a>
+        <a href="#" className="home-link" onClick={(e) => { e.preventDefault(); onBack(); }}>HOME</a>
       </header>
 
       <div className="matches-content">
@@ -122,7 +124,12 @@ const DesignMatches: React.FC<DesignMatchesProps> = ({
           {/* Design Cards */}
           <div className="design-list">
             {designs.map((design) => (
-              <div key={design.id} className="design-match-card">
+              <div 
+                key={design.id} 
+                className="design-match-card"
+                onClick={() => onSelectDesign(design.id)}
+                style={{ cursor: 'pointer' }}
+              >
                 <div className="design-image-section">
                   <img src={design.imageUrl} alt={design.name} />
                   <div className="match-badge">{design.match}% Match</div>
@@ -143,21 +150,30 @@ const DesignMatches: React.FC<DesignMatchesProps> = ({
                   <div className="design-actions">
                     <button
                       className={`action-btn like-btn ${liked[design.id] ? 'active' : ''}`}
-                      onClick={() => handleLike(design.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleLike(design.id);
+                      }}
                     >
                       <ThumbsUp />
                     </button>
                     <button
                       className={`action-btn dislike-btn ${disliked[design.id] ? 'active' : ''}`}
-                      onClick={() => handleDislike(design.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDislike(design.id);
+                      }}
                     >
                       <ThumbsDown />
                     </button>
                     <button
-                      className="view-details-btn"
-                      onClick={() => onSelectDesign(design.id)}
+                      className="action-btn share-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        alert('Share design');
+                      }}
                     >
-                      View Details
+                      <Share2 />
                     </button>
                   </div>
                 </div>
@@ -172,15 +188,16 @@ const DesignMatches: React.FC<DesignMatchesProps> = ({
         <button className="nav-btn nav-btn-back" onClick={onBack}>
           &lt;&lt; BACK
         </button>
-        <button className="nav-btn nav-btn-secondary" onClick={onRebuildSame}>
-          I want to Rebuild Same Style
-        </button>
+        <div className="right-nav">
+          <button className="nav-btn nav-btn-secondary" onClick={onRebuildSame}>
+            I want to Rebuild Same Style
+          </button>
+          <button className="nav-btn nav-btn-next" onClick={() => onSelectDesign(designs[0].id)}>
+            NEXT &gt;&gt;
+          </button>
+        </div>
       </div>
 
-      {/* Chatbot Icon */}
-      <div className="chatbot-icon">
-        <MessageCircle />
-      </div>
     </div>
   );
 };

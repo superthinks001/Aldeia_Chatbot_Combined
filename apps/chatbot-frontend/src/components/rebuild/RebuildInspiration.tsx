@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MessageCircle, Upload, Heart } from 'lucide-react';
+import { MessageCircle, Upload, Home } from 'lucide-react';
 import './RebuildInspiration.css';
 
 interface RebuildInspirationProps {
@@ -58,10 +58,12 @@ const RebuildInspiration: React.FC<RebuildInspirationProps> = ({
       {/* Header */}
       <header className="rebuild-header">
         <div className="logo">
-          <div className="logo-icon">🔥</div>
+          <div className="logo-icon">
+            <Home className="w-4 h-4 text-white" />
+          </div>
           <span className="logo-text">aldeia</span>
         </div>
-        <a href="#" className="home-link">HOME</a>
+        <a href="#" className="home-link" onClick={(e) => { e.preventDefault(); onBack(); }}>HOME</a>
       </header>
 
       <div className="inspiration-content">
@@ -98,8 +100,10 @@ const RebuildInspiration: React.FC<RebuildInspirationProps> = ({
           <div className="upload-section">
             <div className="upload-dropzone-inline">
               <Upload className="upload-icon-small" />
-              <p className="upload-text-inline">Drag and drop or browse</p>
-              <p className="upload-formats-inline">Supported formats: JPG, PNG, JPEG</p>
+              <div className="upload-text-group">
+                <p className="upload-text-inline">Drag and drop or browse</p>
+                <p className="upload-formats-inline">Supported formats: JPG, PNG, JPEG</p>
+              </div>
               <label className="browse-btn-inline">
                 Browse
                 <input
@@ -124,8 +128,10 @@ const RebuildInspiration: React.FC<RebuildInspirationProps> = ({
                   onClick={() => toggleImage(image.id)}
                 >
                   <img src={image.url} alt={image.style} />
-                  <div className="inspiration-overlay">
-                    <Heart className={`heart-icon ${selectedImages.includes(image.id) ? 'filled' : ''}`} />
+                  <div className={`inspiration-checkbox ${selectedImages.includes(image.id) ? 'selected' : ''}`}>
+                    {selectedImages.includes(image.id) && (
+                      <div className="checkbox-inner"></div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -149,10 +155,6 @@ const RebuildInspiration: React.FC<RebuildInspirationProps> = ({
         </div>
       </div>
 
-      {/* Chatbot Icon */}
-      <div className="chatbot-icon">
-        <MessageCircle />
-      </div>
     </div>
   );
 };

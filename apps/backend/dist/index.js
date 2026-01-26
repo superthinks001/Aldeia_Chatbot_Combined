@@ -15,6 +15,7 @@ const database_1 = require("./config/database");
 const auth_routes_1 = __importDefault(require("./routes/auth.routes"));
 const chat_1 = __importDefault(require("./routes/chat"));
 const billing_1 = __importDefault(require("./routes/billing"));
+const translation_1 = __importDefault(require("./routes/translation"));
 // Import middleware
 const authenticate_middleware_1 = require("./middleware/auth/authenticate.middleware");
 const tenant_middleware_1 = require("./middleware/tenant.middleware");
@@ -70,7 +71,9 @@ app.use('/api/auth', auth_routes_1.default);
 // PROTECTED ROUTES (Authentication required)
 // ============================================
 // Apply authentication middleware to all routes below
-app.use('/api/chat', authenticate_middleware_1.authenticate, chat_1.default);
+// Chat routes use optional authentication to support rebuild flow (unauthenticated users)
+app.use('/api/chat', authenticate_middleware_1.optionalAuthenticate, chat_1.default);
+app.use('/api/translation', authenticate_middleware_1.optionalAuthenticate, translation_1.default);
 app.use('/api/billing', authenticate_middleware_1.authenticate, billing_1.default);
 // ============================================
 // ERROR HANDLING

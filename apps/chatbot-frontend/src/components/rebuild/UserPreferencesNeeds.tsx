@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MessageCircle, Bed, Bath, Layers, Grid, Home as HomeIcon, Plus, Waves, Building, Square } from 'lucide-react';
+import { MessageCircle, Bed, Bath, Layers, Grid, Home as HomeIcon, Plus, Waves, Building, Square, Home } from 'lucide-react';
 import './UserPreferencesNeeds.css';
 
 interface UserPreferencesNeedsProps {
@@ -60,10 +60,12 @@ const UserPreferencesNeeds: React.FC<UserPreferencesNeedsProps> = ({
       {/* Header */}
       <header className="rebuild-header">
         <div className="logo">
-          <div className="logo-icon">🔥</div>
+          <div className="logo-icon">
+            <Home className="w-4 h-4 text-white" />
+          </div>
           <span className="logo-text">aldeia</span>
         </div>
-        <a href="#" className="home-link">HOME</a>
+        <a href="#" className="home-link" onClick={(e) => { e.preventDefault(); onBack(); }}>HOME</a>
       </header>
 
       <div className="preferences-content">
@@ -221,10 +223,6 @@ const UserPreferencesNeeds: React.FC<UserPreferencesNeedsProps> = ({
         </button>
       </div>
 
-      {/* Chatbot Icon */}
-      <div className="chatbot-icon">
-        <MessageCircle />
-      </div>
     </div>
   );
 };
