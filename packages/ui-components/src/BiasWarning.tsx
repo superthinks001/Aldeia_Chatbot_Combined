@@ -47,7 +47,7 @@ const BiasWarning: React.FC<BiasWarningProps> = ({
         </button>
       )}
 
-      <style jsx>{`
+      <style>{`
         .bias-warning {
           display: flex;
           align-items: flex-start;

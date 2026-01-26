@@ -154,7 +154,7 @@ const EthicalAIIndicators: React.FC<EthicalAIIndicatorsProps> = ({
             }}
             title="Show more information"
           >
-            {expanded ? '▲' : '▼'} Details
+            {expanded ? '▲' : '▼'} How did you get this answer?
           </button>
         )}
       </div>

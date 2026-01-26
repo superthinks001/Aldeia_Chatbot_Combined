@@ -52,7 +52,7 @@ const MessageList: React.FC<MessageListProps> = ({ messages, className = '' }) =
         </div>
       ))}
 
-      <style jsx>{`
+      <style>{`
         .message-list {
           display: flex;
           flex-direction: column;

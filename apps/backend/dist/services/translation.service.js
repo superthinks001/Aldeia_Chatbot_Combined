@@ -116,6 +116,32 @@ class TranslationService {
         return this.supportedLanguages;
     }
     /**
+     * Get supported languages with names
+     */
+    static getSupportedLanguagesWithNames() {
+        const languageNames = {
+            'en': 'English',
+            'es': 'Spanish',
+            'pt': 'Portuguese',
+            'fr': 'French',
+            'de': 'German',
+            'it': 'Italian',
+            'ja': 'Japanese',
+            'ko': 'Korean',
+            'zh-CN': 'Chinese (Simplified)',
+            'zh-TW': 'Chinese (Traditional)',
+            'ru': 'Russian',
+            'ar': 'Arabic',
+            'hi': 'Hindi',
+            'vi': 'Vietnamese',
+            'th': 'Thai',
+        };
+        return this.supportedLanguages.map(code => ({
+            code,
+            name: languageNames[code] || code
+        }));
+    }
+    /**
      * Check if a language is supported
      */
     static isLanguageSupported(language) {

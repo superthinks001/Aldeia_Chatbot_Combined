@@ -1,7 +1,17 @@
 .design-matches {
   min-height: 100vh;
-  background: #fff;
+  background: #f5f5f5;
   position: relative;
+}
+
+.logo-icon {
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(to right, #fb923c, #ef4444);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .matches-content {
@@ -94,10 +104,12 @@
   display: grid;
   grid-template-columns: 400px 1fr;
   transition: all 0.3s;
+  cursor: pointer;
 }
 
 .design-match-card:hover {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
 }
 
 .design-image-section {

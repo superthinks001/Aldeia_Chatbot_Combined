@@ -202,16 +202,16 @@ export const HALLUCINATION_TEST_CASES: HallucinationTestCase[] = [
 /**
  * Run the hallucination testing suite
  */
-export function runHallucinationTestSuite(
+export async function runHallucinationTestSuite(
   testCases: HallucinationTestCase[] = HALLUCINATION_TEST_CASES
-): HallucinationTestSuiteReport {
+): Promise<HallucinationTestSuiteReport> {
   const results: HallucinationTestResult[] = [];
   const byCategory: { [category: string]: { passed: number; failed: number } } = {};
   const byReliability: { [reliability: string]: number } = {};
   let totalHallucinationRisk = 0;
 
   for (const testCase of testCases) {
-    const result = runHallucinationTest(testCase);
+    const result = await runHallucinationTest(testCase);
     results.push(result);
 
     // Track by category
@@ -254,8 +254,8 @@ export function runHallucinationTestSuite(
 /**
  * Run a single hallucination test
  */
-export function runHallucinationTest(testCase: HallucinationTestCase): HallucinationTestResult {
-  const factCheckResult = factCheck(testCase.input, testCase.context);
+export async function runHallucinationTest(testCase: HallucinationTestCase): Promise<HallucinationTestResult> {
+  const factCheckResult = await factCheck(testCase.input, testCase.context);
 
   let passed = true;
   let message = 'Test passed';
@@ -371,9 +371,9 @@ export function generateHallucinationTestReport(report: HallucinationTestSuiteRe
 /**
  * Run regression tests
  */
-export function runRegressionTests(): HallucinationTestSuiteReport {
+export async function runRegressionTests(): Promise<HallucinationTestSuiteReport> {
   console.log('Running hallucination detection regression tests...');
-  const report = runHallucinationTestSuite();
+  const report = await runHallucinationTestSuite();
   console.log(generateHallucinationTestReport(report));
   return report;
 }
@@ -446,14 +446,16 @@ export interface ConflictDetectionReport {
   falseNegatives: number;
 }
 
-export function testConflictDetection(tests: ConflictDetectionTest[]): ConflictDetectionReport {
+export async function testConflictDetection(tests: ConflictDetectionTest[]): Promise<ConflictDetectionReport> {
   let passed = 0;
   let falsePositives = 0;
   let falseNegatives = 0;
 
   for (const test of tests) {
-    const result1 = factCheck(test.claim1);
-    const result2 = factCheck(test.claim2);
+    const [result1, result2] = await Promise.all([
+      factCheck(test.claim1),
+      factCheck(test.claim2)
+    ]);
 
     // Simplified conflict detection (in reality, this would be more sophisticated)
     const hasConflict = result1.conflicts.length > 0 || result2.conflicts.length > 0;

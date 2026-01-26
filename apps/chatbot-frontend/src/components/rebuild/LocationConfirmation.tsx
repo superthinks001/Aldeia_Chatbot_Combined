@@ -5,6 +5,7 @@ import './LocationConfirmation.css';
 interface LocationConfirmationProps {
   onBack: () => void;
   onNext: (data: PropertyData) => void;
+  onRebuildNew?: () => void;
 }
 
 interface PropertyData {
@@ -23,7 +24,7 @@ interface PropertyData {
   landValue: string;
 }
 
-const LocationConfirmation: React.FC<LocationConfirmationProps> = ({ onBack, onNext }) => {
+const LocationConfirmation: React.FC<LocationConfirmationProps> = ({ onBack, onNext, onRebuildNew }) => {
   const [searchAddress, setSearchAddress] = useState('2743 SANTA ROSA AVE ALTADENA CA 91001-1940');
 
   // Mock property data - in real app, this would be fetched from API
@@ -52,10 +53,12 @@ const LocationConfirmation: React.FC<LocationConfirmationProps> = ({ onBack, onN
       {/* Header */}
       <header className="rebuild-header">
         <div className="logo">
-          <div className="logo-icon">🔥</div>
+          <div className="logo-icon">
+            <Home className="w-4 h-4 text-white" />
+          </div>
           <span className="logo-text">aldeia</span>
         </div>
-        <a href="#" className="home-link">HOME</a>
+        <a href="#" className="home-link" onClick={(e) => { e.preventDefault(); onBack(); }}>HOME</a>
       </header>
 
       <div className="location-content">
@@ -167,11 +170,11 @@ const LocationConfirmation: React.FC<LocationConfirmationProps> = ({ onBack, onN
               <div className="detail-row">
                 <div className="detail-item">
                   <label>Total Value</label>
-                  <div className="value">{propertyData.totalValue}</div>
+                  <div className="value orange">{propertyData.totalValue}</div>
                 </div>
                 <div className="detail-item">
                   <label>Land Value</label>
-                  <div className="value">{propertyData.landValue}</div>
+                  <div className="value orange">{propertyData.landValue}</div>
                 </div>
               </div>
             </div>
@@ -189,10 +192,6 @@ const LocationConfirmation: React.FC<LocationConfirmationProps> = ({ onBack, onN
         </button>
       </div>
 
-      {/* Chatbot Icon */}
-      <div className="chatbot-icon">
-        <MessageCircle />
-      </div>
     </div>
   );
 };

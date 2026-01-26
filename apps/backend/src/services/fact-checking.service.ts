@@ -73,39 +73,29 @@ const AUTHORITATIVE_SOURCES: { [key: string]: AuthoritativeSource } = {
   }
 };
 
-// Known facts database (simplified - in production, this would be a vector database)
-const VERIFIED_FACTS: { [key: string]: {fact: string; sources: string[]; lastVerified: Date} } = {
-  'debris_removal_deadline_la': {
-    fact: 'LA County debris removal opt-out deadline is May 15, 2025',
-    sources: ['LA County Fire Recovery'],
-    lastVerified: new Date('2025-01-01')
-  },
-  'debris_removal_deadline_pasadena': {
-    fact: 'Pasadena debris removal deadline is April 30, 2025',
-    sources: ['Pasadena Fire Recovery'],
-    lastVerified: new Date('2025-01-01')
-  },
-  'insurance_claim_time': {
-    fact: 'Insurance claims should be filed as soon as possible, but most policies allow 1-2 years',
-    sources: ['FEMA', 'Red Cross'],
-    lastVerified: new Date('2025-01-01')
-  },
-  'permit_required_rebuild': {
-    fact: 'Building permits are required for all reconstruction work',
-    sources: ['LA County Fire Recovery', 'Pasadena Fire Recovery'],
-    lastVerified: new Date('2025-01-01')
-  },
-  'financial_assistance_available': {
-    fact: 'FEMA Individual Assistance and California Disaster Assistance programs are available',
-    sources: ['FEMA', 'LA County Fire Recovery'],
-    lastVerified: new Date('2025-01-01')
+// Import ChromaDB fact-checking service
+import { searchSimilarFacts, initializeVerifiedFacts } from './fact-checking-chromadb';
+
+// Initialize verified facts on module load (lazy initialization)
+let factsInitialized = false;
+async function ensureFactsInitialized() {
+  if (!factsInitialized) {
+    try {
+      await initializeVerifiedFacts();
+      factsInitialized = true;
+    } catch (error) {
+      console.error('[FACT-CHECKING] Failed to initialize verified facts:', error);
+    }
   }
-};
+}
 
 /**
- * Fact-check a response
+ * Fact-check a response (async version using ChromaDB)
  */
-export function factCheck(response: string, context?: any): FactCheckResult {
+export async function factCheck(response: string, context?: any): Promise<FactCheckResult> {
+  // Ensure facts are initialized
+  await ensureFactsInitialized();
+  
   const facts = extractClaims(response);
   const verifiedSources: AuthoritativeSource[] = [];
   const conflicts: Conflict[] = [];
@@ -114,7 +104,7 @@ export function factCheck(response: string, context?: any): FactCheckResult {
 
   // Check each claim
   for (const claim of facts) {
-    const verification = verifyClaim(claim, context);
+    const verification = await verifyClaim(claim, context);
 
     if (verification.verified) {
       verifiedCount++;
@@ -185,40 +175,47 @@ function extractClaims(response: string): string[] {
 }
 
 /**
- * Verify a specific claim
+ * Verify a specific claim using ChromaDB vector similarity search
  */
-function verifyClaim(claim: string, context?: any): {
+async function verifyClaim(claim: string, context?: any): Promise<{
   verified: boolean;
   conflicting: boolean;
   sources: AuthoritativeSource[];
   hallucinationRisk: number;
   conflict?: string;
-} {
-  const claimLower = claim.toLowerCase();
+}> {
+  // Search for similar facts in ChromaDB using embeddings
+  const similarFacts = await searchSimilarFacts(claim, 5, 0.7);
 
-  // Check against known facts
-  for (const [key, verifiedFact] of Object.entries(VERIFIED_FACTS)) {
-    const factLower = verifiedFact.fact.toLowerCase();
-
-    // Simple similarity check (in production, use embeddings)
-    if (containsSimilarInfo(claimLower, factLower)) {
-      // Verify consistency
-      if (isConsistent(claimLower, factLower)) {
-        return {
-          verified: true,
-          conflicting: false,
-          sources: verifiedFact.sources.map(s => AUTHORITATIVE_SOURCES[s]),
-          hallucinationRisk: 0.1
-        };
-      } else {
-        return {
-          verified: false,
-          conflicting: true,
-          sources: verifiedFact.sources.map(s => AUTHORITATIVE_SOURCES[s]),
-          hallucinationRisk: 0.8,
-          conflict: `Claim contradicts known fact: ${verifiedFact.fact}`
-        };
-      }
+  if (similarFacts.length > 0) {
+    // Found similar facts - check consistency
+    const bestMatch = similarFacts[0];
+    
+    if (isConsistent(claim.toLowerCase(), bestMatch.fact.toLowerCase())) {
+      // Fact is verified and consistent
+      return {
+        verified: true,
+        conflicting: false,
+        sources: bestMatch.sources.map(s => AUTHORITATIVE_SOURCES[s] || {
+          name: s,
+          reliability: 0.7,
+          category: 'third-party' as const
+        }),
+        hallucinationRisk: 0.1
+      };
+    } else {
+      // Fact contradicts verified fact
+      return {
+        verified: false,
+        conflicting: true,
+        sources: bestMatch.sources.map(s => AUTHORITATIVE_SOURCES[s] || {
+          name: s,
+          reliability: 0.7,
+          category: 'third-party' as const
+        }),
+        hallucinationRisk: 0.8,
+        conflict: `Claim contradicts known fact: ${bestMatch.fact}`
+      };
     }
   }
 

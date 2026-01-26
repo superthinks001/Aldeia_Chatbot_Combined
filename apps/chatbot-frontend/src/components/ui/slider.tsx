@@ -1,27 +1,71 @@
-"use client"
-
 import * as React from "react"
 import * as SliderPrimitive from "@radix-ui/react-slider"
 
 import { cn } from "@/lib/utils"
+import "./slider.css"
 
 const Slider = React.forwardRef<
   React.ElementRef<typeof SliderPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof SliderPrimitive.Root>
 >(({ className, ...props }, ref) => (
-  <SliderPrimitive.Root
-    ref={ref}
-    className={cn(
-      "relative flex w-full touch-none select-none items-center",
-      className
-    )}
-    {...props}
-  >
-    <SliderPrimitive.Track className="relative h-2 w-full grow overflow-hidden rounded-full bg-secondary">
-      <SliderPrimitive.Range className="absolute h-full bg-primary" />
-    </SliderPrimitive.Track>
-    <SliderPrimitive.Thumb className="block h-5 w-5 rounded-full border-2 border-primary bg-background ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50" />
-  </SliderPrimitive.Root>
+  <div style={{ width: '100%', padding: '10px 0', position: 'relative' }}>
+    <SliderPrimitive.Root
+      ref={ref}
+      className={cn("slider-root", className)}
+      style={{
+        position: 'relative',
+        display: 'flex',
+        alignItems: 'center',
+        width: '100%',
+        touchAction: 'none',
+        userSelect: 'none',
+        height: '20px'
+      }}
+      {...props}
+    >
+      <SliderPrimitive.Track 
+        className="slider-track"
+        style={{
+          position: 'relative',
+          flexGrow: 1,
+          height: '8px',
+          backgroundColor: '#e5e5e5',
+          borderRadius: '9999px',
+          overflow: 'hidden',
+          width: '100%'
+        }}
+      >
+        <SliderPrimitive.Range 
+          className="slider-range"
+          style={{
+            position: 'absolute',
+            height: '100%',
+            backgroundColor: '#ff6b4a',
+            borderRadius: '9999px',
+            left: 0,
+            right: 0
+          }}
+        />
+      </SliderPrimitive.Track>
+      <SliderPrimitive.Thumb 
+        className="slider-thumb"
+        style={{
+          display: 'block',
+          width: '20px',
+          height: '20px',
+          backgroundColor: '#ffffff',
+          border: '2px solid #ff6b4a',
+          borderRadius: '50%',
+          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+          cursor: 'pointer',
+          transition: 'all 0.2s',
+          outline: 'none',
+          position: 'relative',
+          zIndex: 1
+        }}
+      />
+    </SliderPrimitive.Root>
+  </div>
 ))
 Slider.displayName = SliderPrimitive.Root.displayName
 
