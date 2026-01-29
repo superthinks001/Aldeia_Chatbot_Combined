@@ -1,0 +1,22 @@
+.confidence-score-viewer {
+  border-top: 1px solid #e0e0e0;
+  background: white;
+}
+
+.confidence-score-viewer > div:last-child {
+  scrollbar-width: thin;
+  scrollbar-color: #ccc transparent;
+}
+
+.confidence-score-viewer > div:last-child::-webkit-scrollbar {
+  width: 6px;
+}
+
+.confidence-score-viewer > div:last-child::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.confidence-score-viewer > div:last-child::-webkit-scrollbar-thumb {
+  background-color: #ccc;
+  border-radius: 3px;
+}

@@ -91,7 +91,7 @@ const InputBox: React.FC<InputBoxProps> = ({
         Press Enter to send, Shift + Enter for new line
       </div>
 
-      <style jsx>{`
+      <style>{`
         .input-box {
           width: 100%;
         }

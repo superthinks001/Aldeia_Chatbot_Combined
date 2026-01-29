@@ -1,15 +1,52 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import socketService from '../services/socket.service';
 
 interface InputBoxProps {
   onSend: (text: string) => void;
   disabled?: boolean;
+  conversationId?: string | null;
 }
 
-const InputBox: React.FC<InputBoxProps> = ({ onSend, disabled }) => {
+const InputBox: React.FC<InputBoxProps> = ({ onSend, disabled, conversationId }) => {
   const [value, setValue] = useState('');
+  const typingTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  // Handle typing indicators
+  useEffect(() => {
+    if (value.trim() && conversationId && socketService.isSocketConnected()) {
+      socketService.startTyping(conversationId);
+      
+      // Clear existing timeout
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      
+      // Stop typing after 3 seconds of inactivity
+      typingTimeoutRef.current = setTimeout(() => {
+        socketService.stopTyping(conversationId!);
+      }, 3000);
+    }
+
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      if (conversationId && socketService.isSocketConnected()) {
+        socketService.stopTyping(conversationId);
+      }
+    };
+  }, [value, conversationId]);
 
   const handleSend = () => {
     if (value.trim()) {
+      // Stop typing indicator
+      if (conversationId && socketService.isSocketConnected()) {
+        socketService.stopTyping(conversationId);
+      }
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      
       onSend(value.trim());
       setValue('');
     }

@@ -111,68 +111,78 @@ const VoiceInput: React.FC<VoiceInputProps> = ({ onTranscript, isDisabled = fals
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+    <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px', width: '100%' }}>
       <button
         onClick={toggleListening}
         disabled={isDisabled}
         title={isListening ? 'Stop listening' : 'Start voice input'}
         style={{
-          padding: '10px 16px',
+          padding: '6px 12px',
           background: isListening ? '#e74c3c' : '#667eea',
           color: 'white',
           border: 'none',
-          borderRadius: '8px',
+          borderRadius: '6px',
           cursor: isDisabled ? 'not-allowed' : 'pointer',
-          fontSize: '16px',
-          fontWeight: 600,
+          fontSize: '12px',
+          fontWeight: 500,
           display: 'flex',
           alignItems: 'center',
-          gap: '8px',
+          gap: '4px',
           transition: 'all 0.2s',
           opacity: isDisabled ? 0.5 : 1,
+          flexShrink: 0
         }}
       >
         <span>{isListening ? '🛑' : '🎤'}</span>
-        <span>{isListening ? 'Listening...' : 'Voice Input'}</span>
+        <span>{isListening ? 'Listening...' : 'Voice'}</span>
       </button>
 
       {transcript && (
         <div
           style={{
-            padding: '10px',
+            padding: '6px 10px',
             background: '#f0f0f0',
             borderRadius: '6px',
-            fontSize: '14px',
+            fontSize: '12px',
             color: '#333',
             fontStyle: 'italic',
+            flex: 1,
+            minWidth: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap'
           }}
+          title={transcript}
         >
           {transcript}
         </div>
       )}
 
-      {isListening && (
+      {isListening && !transcript && (
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: '6px',
-            padding: '8px',
+            padding: '6px 10px',
             background: '#fff3cd',
             borderRadius: '6px',
-            fontSize: '13px',
+            fontSize: '11px',
+            flex: 1,
+            minWidth: 0
           }}
         >
           <div
             style={{
-              width: '12px',
-              height: '12px',
+              width: '8px',
+              height: '8px',
               background: '#e74c3c',
               borderRadius: '50%',
               animation: 'pulse 1.5s ease-in-out infinite',
+              flexShrink: 0
             }}
           />
-          <span>Listening for your voice...</span>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Listening...</span>
         </div>
       )}
 

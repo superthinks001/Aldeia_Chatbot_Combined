@@ -521,11 +521,33 @@ async function triggerReingestion(documentId: string, content: string): Promise<
       .eq('document_id', documentId)
       .eq('reingestion_status', 'pending');
 
-    // In production, this would trigger the actual document ingestion pipeline
-    // For now, we'll simulate the process
+    // Get document details
+    const { data: docData } = await supabase
+      .from('monitored_documents')
+      .select('url, title, document_type')
+      .eq('id', documentId)
+      .single();
 
-    // Simulate processing delay
-    await new Promise(resolve => setTimeout(resolve, 100));
+    if (!docData) {
+      throw new Error(`Document ${documentId} not found`);
+    }
+
+    // Import document ingestion function
+    const { reindexAllDocuments } = await import('../document_ingest');
+    
+    // Trigger actual document re-ingestion
+    // For single document re-ingestion, we'll process the URL
+    // The reindexAllDocuments function processes all PDFs, so we'll call it
+    // In a production system, you might want a single-document ingestion function
+    // For now, we'll trigger the full reindex which will update the changed document
+    console.log(`[DOCUMENT MONITOR] Triggering re-ingestion for document: ${docData.title} (${docData.url})`);
+    
+    // Execute re-ingestion (this will process all documents including the updated one)
+    const result = await reindexAllDocuments();
+    
+    if (result.errors && result.errors.length > 0) {
+      console.warn(`[DOCUMENT MONITOR] Re-ingestion completed with ${result.errors.length} errors`);
+    }
 
     // Update status to completed
     await supabase
@@ -552,7 +574,7 @@ async function triggerReingestion(documentId: string, content: string): Promise<
 
     return true;
   } catch (error) {
-    console.error('Re-ingestion failed:', error);
+    console.error('[DOCUMENT MONITOR] Re-ingestion failed:', error);
 
     // Update status to failed
     await supabase

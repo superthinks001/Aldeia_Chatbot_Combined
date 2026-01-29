@@ -7,6 +7,10 @@
 # Stage 1: Build
 FROM node:18-alpine AS builder
 
+# Build argument for API URL (passed from docker build or GitHub Actions)
+ARG REACT_APP_API_URL=http://localhost:3001/api
+ENV REACT_APP_API_URL=$REACT_APP_API_URL
+
 WORKDIR /workspace
 
 # Copy workspace package files first (for better layer caching)

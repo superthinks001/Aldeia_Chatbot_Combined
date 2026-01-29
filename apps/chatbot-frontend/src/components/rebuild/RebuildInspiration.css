@@ -1,7 +1,17 @@
 .rebuild-inspiration {
   min-height: 100vh;
-  background: #fff;
+  background: #f5f5f5;
   position: relative;
+}
+
+.logo-icon {
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(to right, #fb923c, #ef4444);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .inspiration-content {
@@ -58,10 +68,20 @@
   border-radius: 12px;
   padding: 24px;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   background: #fafafa;
   transition: all 0.3s;
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.upload-text-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
 }
 
 .upload-dropzone-inline:hover {
@@ -143,24 +163,31 @@
   object-fit: cover;
 }
 
-.inspiration-overlay {
+.inspiration-checkbox {
   position: absolute;
-  top: 12px;
-  right: 12px;
-}
-
-.heart-icon {
-  width: 32px;
-  height: 32px;
-  color: white;
-  fill: transparent;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: all 0.3s;
 }
 
-.heart-icon.filled {
-  fill: #FF6B4A;
-  color: #FF6B4A;
+.inspiration-checkbox.selected {
+  background: #ff6b4a;
+  border-color: #ff6b4a;
+}
+
+.checkbox-inner {
+  width: 12px;
+  height: 12px;
+  background: #ffffff;
+  border-radius: 50%;
 }
 
 /* Navigation */

@@ -1,0 +1,12 @@
+.prompt-templates-container {
+  border-top: 1px solid #e0e0e0;
+  background: white;
+}
+
+.prompt-templates-container button {
+  transition: all 0.2s ease;
+}
+
+.prompt-templates-container button:hover {
+  transform: translateY(-1px);
+}

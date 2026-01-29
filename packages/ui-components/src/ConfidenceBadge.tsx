@@ -39,7 +39,7 @@ const ConfidenceBadge: React.FC<ConfidenceBadgeProps> = ({
     >
       {Math.round(confidence * 100)}%
       
-      <style jsx>{`
+      <style>{`
         .confidence-badge {
           display: inline-flex;
           align-items: center;

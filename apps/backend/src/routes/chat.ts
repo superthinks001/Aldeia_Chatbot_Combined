@@ -16,6 +16,10 @@ import { getProactiveNotifications } from '../services/proactive-notifications.s
 import { checkHandoffTriggers, prepareHandoffContext, getHandoffMessage, getHandoffContact } from '../services/human-handoff.service';
 // Sprint 3 Services - Interest-based suggestions
 import { getUserSuggestions } from '../services/interest-suggestions.service';
+// Audit trail for feedback and flagging
+import { logAuditEvent, AuditEventType, AuditSeverity } from '../services/audit-trail.service';
+// Correction deployment
+import { getCorrections } from '../services/correction-deployment.service';
 
 const router = Router();
 
@@ -146,6 +150,102 @@ function formatResponse(answer: string, source: string, bias: boolean): string {
   return response;
 }
 
+// Generate intent-based response when no document matches are found
+function generateIntentBasedResponse(intent: string, message: string, entities: any): string {
+  const intentResponses: Record<string, string> = {
+    process: `Based on your question about "${message}", here's a general overview of the rebuilding process:
+
+**For fire recovery and rebuilding in LA County, you typically need to:**
+
+1. **Initial Assessment**: Contact your local fire recovery office or FEMA for damage assessment
+2. **Debris Removal**: Coordinate debris removal (may be handled by county or require private contractor)
+3. **Permits**: Obtain necessary building permits from your local building department
+4. **Inspections**: Schedule required inspections at various stages of rebuilding
+5. **Final Approval**: Complete final inspections and obtain occupancy permits
+
+${entities?.location ? `**For ${entities.location.charAt(0).toUpperCase() + entities.location.slice(1)} specifically:**\n- Contact your local building department for area-specific requirements\n- Check with your local fire department for fire safety regulations\n- Verify any HOA or local zoning requirements\n\n` : ''}**Important Resources:**
+- LA County Building and Safety: (213) 482-7000
+- FEMA Disaster Assistance: 1-800-621-3362
+- LA County Office of Emergency Management: (323) 890-4000
+
+Would you like more specific information about any of these steps?`,
+    
+    status: `To check the status of your fire recovery application or request, you can:
+
+1. Contact your local fire recovery office directly
+2. Check online portals if available for your county
+3. Call the FEMA helpline for federal assistance status
+4. Contact your insurance company for claim status
+
+Could you provide more details about what specific status you're checking?`,
+    
+    financial: `For financial assistance related to fire recovery, there are several options:
+
+1. **FEMA Assistance**: Federal emergency assistance programs
+2. **Insurance Claims**: Work with your insurance provider
+3. **State/Local Grants**: Check with LA County for local assistance programs
+4. **Non-profit Organizations**: Various charities provide fire recovery aid
+
+Would you like more information about any of these options?`,
+    
+    location: `For fire recovery information in ${entities?.location ? entities.location.charAt(0).toUpperCase() + entities.location.slice(1) : 'LA County'}:
+
+${entities?.location?.toLowerCase().includes('altadena') ? `**For Altadena specifically:**
+- Altadena is served by LA County services
+- Contact the LA County Office of Emergency Management at (323) 890-4000
+- Visit the LA County Fire Department for local fire recovery resources
+- Check with the Altadena Community Center for local assistance programs
+
+**Rebuilding in Altadena:**
+- Building permits are handled through LA County Building and Safety
+- Contact (213) 482-7000 for permit information
+- You may need to coordinate with both LA County and any local HOA requirements
+- Consider consulting with a local contractor familiar with Altadena building codes
+
+` : entities?.location?.toLowerCase().includes('pasadena') ? `**For Pasadena specifically:**
+- Contact Pasadena City Hall at (626) 744-4000
+- Building permits: Pasadena Building and Safety Division
+- Fire Department: (626) 744-4655
+- Visit pasadena.gov for official fire recovery resources
+
+` : `- **LA County Fire Recovery**: Contact the LA County Office of Emergency Management
+- **Pasadena**: Contact Pasadena City Hall or the fire department  
+- **Altadena**: Check with LA County services
+
+`}You can also visit the official LA County fire recovery website for the most up-to-date information and office locations.`,
+    
+    emergency: `If this is an emergency, please call 911 immediately.
+
+For urgent fire recovery assistance:
+- **Emergency Services**: 911
+- **FEMA Disaster Assistance**: 1-800-621-3362
+- **LA County Emergency**: Check local emergency services
+
+For non-emergency fire recovery questions, I'm here to help with information about permits, debris removal, rebuilding processes, and recovery resources.`,
+    
+    legal: `For legal questions about fire recovery:
+
+1. **Legal Aid Organizations**: Contact local legal aid services
+2. **Insurance Disputes**: Consult with an attorney specializing in insurance law
+3. **Permit Issues**: Contact your local building department
+4. **Rights and Regulations**: Review LA County fire recovery regulations
+
+I recommend consulting with a qualified attorney for specific legal advice. Would you like general information about fire recovery regulations?`
+  };
+
+  // Return intent-specific response or generic helpful response
+  const response = intentResponses[intent] || `I understand you're asking about "${message}". While I don't have specific documents matching your question, I can help you with:
+
+- Fire recovery processes and procedures
+- Debris removal information
+- Rebuilding permits and inspections
+- Recovery resources and assistance programs
+
+Could you provide more details about what specific information you need? This will help me give you a more targeted answer.`;
+
+  return response;
+}
+
 // Helper: Generate clarification options based on message and context
 function generateClarificationOptions(message: string, context: any): string[] {
   const msg = message.toLowerCase();
@@ -183,36 +283,60 @@ function getProactiveNotification(message: string, context: any): string | null 
 }
 
 router.post('/', async (req: Request, res: Response) => {
-  // Get authenticated user info
-  const userId = parseInt(req.user!.userId); // Convert string to number
-  const userEmail = req.user!.email;
+  // Get authenticated user info (optional for rebuild flow)
+  const userId = req.user ? parseInt(req.user.userId) : null;
+  const userEmail = req.user?.email || null;
+  const isRebuildFlow = req.body.rebuildStep && ['landing', 'location', 'preferences-style', 'preferences-needs', 'inspiration', 'budget', 'matches', 'details'].includes(req.body.rebuildStep);
 
-  let { message, context, pageUrl, isFirstMessage, conversationId, userProfile } = req.body;
+  let { message, context, pageUrl, isFirstMessage, conversationId, userProfile, rebuildStep, rebuildStepContext } = req.body;
   // Sanitize all user input
   message = typeof message === 'string' ? sanitizeInput(message) : '';
-  context = typeof context === 'string' ? sanitizeInput(context) : '';
+  context = typeof context === 'string' ? sanitizeInput(context) : (typeof context === 'object' ? context : {});
   pageUrl = typeof pageUrl === 'string' ? sanitizeInput(pageUrl) : '';
   isFirstMessage = Boolean(isFirstMessage);
   conversationId = typeof conversationId === 'string' ? conversationId : null;
+  
+  // Add rebuild step context to context object
+  if (rebuildStep) {
+    if (typeof context === 'string') {
+      try {
+        context = JSON.parse(context);
+      } catch {
+        context = { original: context };
+      }
+    }
+    context.rebuildStep = rebuildStep;
+    context.rebuildStepContext = rebuildStepContext;
+  }
 
-  // Create or get conversation from database
+  // Create or get conversation from database (only if authenticated)
   let conversation = null;
-  if (!isFirstMessage) {
-    conversation = await ConversationsService.createOrGetConversation(
-      userId,
-      conversationId || undefined,
-      undefined, // title - auto-generated later
-      userProfile?.language || 'en'
-    );
-    // Update conversationId if new conversation was created
-    if (conversation && !conversationId) {
-      conversationId = conversation.id;
+  if (!isFirstMessage && userId) {
+    try {
+      conversation = await ConversationsService.createOrGetConversation(
+        userId,
+        conversationId || undefined,
+        undefined, // title - auto-generated later
+        userProfile?.language || 'en'
+      );
+      // Update conversationId if new conversation was created
+      if (conversation && !conversationId) {
+        conversationId = conversation.id;
+      }
+    } catch (error) {
+      console.warn('Failed to create conversation (may be unauthenticated):', error);
     }
   }
 
   // Track context for conversation
   let convContext = conversationId ? (conversationContexts[conversationId] || { history: [] }) : { history: [] };
-  if (context) convContext.pageContext = context;
+  if (context) {
+    convContext.pageContext = context;
+    if (rebuildStep) {
+      convContext.rebuildStep = rebuildStep;
+      convContext.rebuildStepContext = rebuildStepContext;
+    }
+  }
   if (message) convContext.lastUserMessage = message;
   // Store user profile if provided
   if (userProfile) {
@@ -255,7 +379,9 @@ router.post('/', async (req: Request, res: Response) => {
   // Sprint 2: Enhanced NLP intent classification
   const intentResult = enhancedClassifyIntent(message, {
     location: context?.location,
-    topic: context?.topic,
+    topic: context?.topic || context?.rebuildStep,
+    rebuildStep: rebuildStep || context?.rebuildStep,
+    rebuildStepContext: rebuildStepContext || context?.rebuildStepContext,
     pageContext: convContext.pageContext,
     conversationHistory: convContext.history
   });
@@ -282,12 +408,11 @@ router.post('/', async (req: Request, res: Response) => {
     }
     // Note: collection (ChromaDB) is optional - fallback logic exists below
     
-    // If ambiguous, return a clarifying prompt with friendly tone
-    if (ambiguous) {
-      // Use enhanced NLP clarifications if available
-      const clarificationText = intentResult.suggestedClarifications && intentResult.suggestedClarifications.length > 0
-        ? intentResult.suggestedClarifications[0]
-        : "I'd love to help you, but I'm not quite sure what you're asking. Could you please provide more details or rephrase your question? I'm here to assist with fire recovery information, permits, debris removal, rebuilding processes, and more.";
+    // If ambiguous, still try to provide helpful response based on intent
+    // Only skip to clarification if confidence is extremely low (< 0.3)
+    if (ambiguous && intentResult.confidence < 0.3) {
+      // Only for very unclear messages, ask for clarification
+      const clarificationText = "I'd love to help you, but I'm not quite sure what you're asking. Could you please provide more details? For example:\n\n- Are you asking about the rebuilding process?\n- Do you need information about permits?\n- Are you looking for debris removal services?\n- Do you need financial assistance information?\n\nPlease provide more details and I'll be happy to help!";
 
       // Add bot clarification to history
       convContext.history.push({ sender: 'bot', text: clarificationText });
@@ -308,9 +433,6 @@ router.post('/', async (req: Request, res: Response) => {
         });
       }
 
-      // Use enhanced clarification options
-      const clarificationOptions = intentResult.suggestedClarifications || generateClarificationOptions(message, convContext);
-
       return res.json({
         response: clarificationText,
         confidence: intentResult.confidence,
@@ -324,10 +446,10 @@ router.post('/', async (req: Request, res: Response) => {
         secondaryIntents: intentResult.secondaryIntents,
         entities,
         ambiguous: true,
-        history: convContext.history,
-        clarificationOptions
+        history: convContext.history
       });
     }
+    // If ambiguous but confidence >= 0.3, continue with intent-based response below
     
     // Generate embedding for the user message, including last N turns as context
     let contextText = '';
@@ -364,15 +486,39 @@ router.post('/', async (req: Request, res: Response) => {
     }
     // Check if the top match is good enough
     if (!matches.length || matches[0].distance === undefined || matches[0].distance > 2.0) {
+      // Generate intent-based response when no good matches found
+      const intentBasedResponse = generateIntentBasedResponse(intent, message, entities);
+      
+      // Add to conversation history
+      convContext.history.push({ sender: 'bot', text: intentBasedResponse });
+      if (conversationId) conversationContexts[conversationId] = convContext;
+      
+      // Store in database if conversation exists
+      if (conversation && conversationId) {
+        await ConversationsService.addMessage(conversationId, 'user', message, {
+          intent,
+          intentConfidence: intentResult.confidence,
+          entities
+        });
+        await ConversationsService.addMessage(conversationId, 'bot', intentBasedResponse, {
+          intent,
+          confidence: 0.6,
+          grounded: false
+        });
+      }
+      
       return res.json({
-        response: "I'm sorry, but I couldn't find specific information about that in our official documents. This could be because the information isn't available yet, or you might want to try rephrasing your question. I'm here to help with fire recovery topics like debris removal, rebuilding permits, inspections, and recovery resources.",
-        confidence: 0.5,
+        response: intentBasedResponse,
+        confidence: 0.6,
         bias,
         uncertainty: true,
         context: context || null,
         grounded: false,
-        hallucination: true,
-        intent
+        hallucination: false,
+        intent,
+        intentConfidence: intentResult.confidence,
+        entities,
+        history: convContext.history
       });
     }
     // Calculate confidence: 1 - (distance / 2.0), clamp 0-1
@@ -391,7 +537,7 @@ router.post('/', async (req: Request, res: Response) => {
     }
     
     // Sprint 2: Fact-checking the AI response
-    const factCheckResult = factCheck(answer, {
+    const factCheckResult = await factCheck(answer, {
       location: entities.location || context?.location,
       topic: entities.topic || context?.topic,
       intent
@@ -523,27 +669,35 @@ router.post('/', async (req: Request, res: Response) => {
     // Use enhanced response formatting
     const replyFormatted = formatResponse(reply, selected.source, bias);
 
-    // Log bot response event with Sprint 2 metadata
-    await AnalyticsService.logEvent({
-      user_id: userId,
-      conversation_id: conversationId || undefined,
-      event_type: 'bot_response',
-      message: replyFormatted,
-      metadata: {
-        intent,
-        bias,
-        biasScore: biasAnalysis.biasScore,
-        ambiguous,
-        alternatives,
-        notification,
-        notifications: notifications.map(n => ({ type: n.type, priority: n.priority })),
-        confidence,
-        factCheckReliability: factCheckResult.reliability,
-        hallucinationRisk: factCheckResult.hallucinationRisk,
-        handoffRequired,
-        handoffReason: handoffRequired ? handoffTrigger.reason : null
+    // Log bot response event with Sprint 2 metadata (only if authenticated)
+    if (userId) {
+      try {
+        await AnalyticsService.logEvent({
+          user_id: userId,
+          conversation_id: conversationId || undefined,
+          event_type: 'bot_response',
+          message: replyFormatted,
+          metadata: {
+            intent,
+            bias,
+            biasScore: biasAnalysis.biasScore,
+            ambiguous,
+            alternatives,
+            notification,
+            notifications: notifications.map(n => ({ type: n.type, priority: n.priority })),
+            confidence,
+            factCheckReliability: factCheckResult.reliability,
+            hallucinationRisk: factCheckResult.hallucinationRisk,
+            handoffRequired,
+            handoffReason: handoffRequired ? handoffTrigger.reason : null,
+            rebuildStep: rebuildStep || null,
+            rebuildStepContext: rebuildStepContext || null
+          }
+        });
+      } catch (error) {
+        console.warn('Failed to log analytics event:', error);
       }
-    });
+    }
 
     // Store bot response in conversation history with Sprint 2 metadata
     if (conversation && conversationId) {
@@ -564,20 +718,26 @@ router.post('/', async (req: Request, res: Response) => {
       );
     }
 
-    // Log handoff event if needed with enhanced metadata
-    if (handoffRequired) {
-      await AnalyticsService.logEvent({
-        user_id: userId,
-        conversation_id: conversationId || undefined,
-        event_type: 'handoff',
-        message,
-        metadata: {
-          reason: handoffTrigger.reason,
-          priority: handoffTrigger.priority,
-          suggestedExpert: handoffTrigger.suggestedExpert,
-          contextSummary: handoffTrigger.contextSummary
-        }
-      });
+    // Log handoff event if needed with enhanced metadata (only if authenticated)
+    if (handoffRequired && userId) {
+      try {
+        await AnalyticsService.logEvent({
+          user_id: userId,
+          conversation_id: conversationId || undefined,
+          event_type: 'handoff',
+          message,
+          metadata: {
+            reason: handoffTrigger.reason,
+            priority: handoffTrigger.priority,
+            suggestedExpert: handoffTrigger.suggestedExpert,
+            contextSummary: handoffTrigger.contextSummary,
+            rebuildStep: rebuildStep || null,
+            rebuildStepContext: rebuildStepContext || null
+          }
+        });
+      } catch (error) {
+        console.warn('Failed to log analytics event:', error);
+      }
     }
 
     res.json({
@@ -689,6 +849,133 @@ router.post('/search', async (req: Request, res: Response) => {
   }
 });
 
+// User feedback endpoint
+router.post('/feedback', async (req: Request, res: Response) => {
+  try {
+    const { messageId, conversationId, helpful, messageText, confidence, timestamp } = req.body;
+    const userId = (req as any).user?.id;
+
+    // Log feedback to audit trail
+    await logAuditEvent({
+      eventType: AuditEventType.USER_MESSAGE,
+      severity: AuditSeverity.INFO,
+      userId: userId || undefined,
+      conversationId: conversationId || undefined,
+      message: `User feedback: ${helpful ? 'helpful' : 'not helpful'}`,
+      details: {
+        messageId,
+        helpful,
+        messageText,
+        confidence,
+        timestamp
+      },
+      userImpact: 'low'
+    });
+
+    // Store in user_feedback table if authenticated
+    if (userId) {
+      const { error } = await supabase
+        .from('user_feedback')
+        .insert([{
+          user_id: userId,
+          conversation_id: conversationId || null,
+          message_text: messageText,
+          helpful: helpful,
+          satisfaction_score: helpful ? 5 : 1,
+          created_at: timestamp || new Date().toISOString()
+        }]);
+
+      if (error) {
+        console.error('Failed to store feedback:', error);
+      }
+    }
+
+    res.json({ success: true, message: 'Feedback recorded' });
+  } catch (error) {
+    console.error('Feedback endpoint error:', error);
+    res.status(500).json({ error: 'Failed to record feedback' });
+  }
+});
+
+// Flag response endpoint
+router.post('/flag-response', async (req: Request, res: Response) => {
+  try {
+    const { messageId, conversationId, reason, messageText, confidence, timestamp } = req.body;
+    const userId = (req as any).user?.id;
+
+    // Log flag to audit trail with high priority
+    await logAuditEvent({
+      eventType: AuditEventType.WARNING_TRIGGERED,
+      severity: AuditSeverity.WARNING,
+      userId: userId || undefined,
+      conversationId: conversationId || undefined,
+      message: `User flagged response: ${reason}`,
+      details: {
+        messageId,
+        reason,
+        messageText,
+        confidence,
+        timestamp
+      },
+      userImpact: 'high',
+      reviewRequired: true
+    });
+
+    res.json({ success: true, message: 'Response flagged for review' });
+  } catch (error) {
+    console.error('Flag endpoint error:', error);
+    res.status(500).json({ error: 'Failed to flag response' });
+  }
+});
+
+// Get confidence scores for user/conversation
+router.get('/confidence-scores', async (req: Request, res: Response) => {
+  try {
+    const { conversationId, userId: userIdParam } = req.query;
+    const userId = (req as any).user?.id || userIdParam;
+
+    let query = supabase
+      .from('audit_trail')
+      .select('id, timestamp, message, details, ai_decision')
+      .eq('event_type', AuditEventType.BOT_RESPONSE)
+      .order('timestamp', { ascending: false })
+      .limit(50);
+
+    if (conversationId) {
+      query = query.eq('conversation_id', conversationId);
+    }
+    if (userId) {
+      query = query.eq('user_id', userId);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      throw error;
+    }
+
+    const scores = (data || []).map((entry: any) => {
+      const aiDecision = typeof entry.ai_decision === 'string' 
+        ? JSON.parse(entry.ai_decision) 
+        : entry.ai_decision;
+      
+      return {
+        id: entry.id,
+        timestamp: entry.timestamp,
+        confidence: aiDecision?.confidence || 0,
+        messageText: entry.message || '',
+        intent: entry.details?.intent,
+        sources: entry.details?.sources || []
+      };
+    }).filter((s: any) => s.confidence > 0);
+
+    res.json({ scores });
+  } catch (error) {
+    console.error('Confidence scores endpoint error:', error);
+    res.status(500).json({ error: 'Failed to fetch confidence scores' });
+  }
+});
+
 // Admin endpoint to fetch last 100 bias/fairness log entries
 router.get('/bias-logs', requirePermission(Permission.VIEW_SYSTEM_LOGS), async (req: Request, res: Response) => {
   try {
@@ -772,6 +1059,18 @@ router.post('/admin/documents/upload', requirePermission(Permission.MANAGE_CONTE
     res.json({ message: 'File upload endpoint - implementation pending' });
   } catch (err) {
     res.status(500).json({ error: 'Failed to upload file' });
+  }
+});
+
+// Get corrections for a message
+router.get('/corrections/:messageId', async (req: Request, res: Response) => {
+  try {
+    const { messageId } = req.params;
+    const corrections = await getCorrections(messageId);
+    res.json({ corrections });
+  } catch (error) {
+    console.error('Corrections endpoint error:', error);
+    res.status(500).json({ error: 'Failed to fetch corrections' });
   }
 });
 

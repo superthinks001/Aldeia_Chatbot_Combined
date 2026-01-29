@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MessageCircle, Upload, X } from 'lucide-react';
+import { MessageCircle, Upload, X, Home } from 'lucide-react';
 import './UserPreferencesStyle.css';
 
 interface UserPreferencesStyleProps {
@@ -55,10 +55,12 @@ const UserPreferencesStyle: React.FC<UserPreferencesStyleProps> = ({
       {/* Header */}
       <header className="rebuild-header">
         <div className="logo">
-          <div className="logo-icon">🔥</div>
+          <div className="logo-icon">
+            <Home className="w-4 h-4 text-white" />
+          </div>
           <span className="logo-text">aldeia</span>
         </div>
-        <a href="#" className="home-link">HOME</a>
+        <a href="#" className="home-link" onClick={(e) => { e.preventDefault(); onBack(); }}>HOME</a>
       </header>
 
       <div className="style-content">
@@ -148,10 +150,6 @@ const UserPreferencesStyle: React.FC<UserPreferencesStyleProps> = ({
         </div>
       </div>
 
-      {/* Chatbot Icon */}
-      <div className="chatbot-icon">
-        <MessageCircle />
-      </div>
     </div>
   );
 };

@@ -11,9 +11,11 @@ import { testConnection } from './config/database';
 import authRoutes from './routes/auth.routes';
 import chatRoutes from './routes/chat';
 import billingRoutes from './routes/billing';
+import translationRoutes from './routes/translation';
+import pushRoutes from './routes/push';
 
 // Import middleware
-import { authenticate } from './middleware/auth/authenticate.middleware';
+import { authenticate, optionalAuthenticate } from './middleware/auth/authenticate.middleware';
 import { tenantMiddleware } from './middleware/tenant.middleware';
 
 // Import WebSocket
@@ -83,7 +85,10 @@ app.use('/api/auth', authRoutes);
 // ============================================
 
 // Apply authentication middleware to all routes below
-app.use('/api/chat', authenticate, chatRoutes);
+// Chat routes use optional authentication to support rebuild flow (unauthenticated users)
+app.use('/api/chat', optionalAuthenticate, chatRoutes);
+app.use('/api/translation', optionalAuthenticate, translationRoutes);
+app.use('/api/push', optionalAuthenticate, pushRoutes);
 app.use('/api/billing', authenticate, billingRoutes);
 
 // ============================================

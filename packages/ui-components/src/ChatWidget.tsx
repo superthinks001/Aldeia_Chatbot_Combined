@@ -127,7 +127,7 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({
         </div>
       )}
 
-      <style jsx>{`
+      <style>{`
         .chat-widget {
           position: fixed;
           bottom: 20px;

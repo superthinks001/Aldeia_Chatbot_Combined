@@ -1,0 +1,383 @@
+/* Selected Design Details Styles */
+
+.design-details {
+  min-height: 100vh;
+  background: #f5f5f5;
+  position: relative;
+}
+
+.design-details-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 40px;
+  background: #ffffff;
+  border-bottom: 1px solid #e5e5e5;
+}
+
+.design-details-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: opacity 0.3s;
+}
+
+.design-details-logo:hover {
+  opacity: 0.8;
+}
+
+.design-details-logo-icon {
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(to right, #fb923c, #ef4444);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.design-details-logo-text {
+  font-size: 24px;
+  font-weight: bold;
+  color: #000000;
+  text-transform: lowercase;
+}
+
+.design-details-home-link {
+  color: #000000;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  text-transform: uppercase;
+  transition: color 0.3s;
+}
+
+.design-details-home-link:hover {
+  color: #ff6b4a;
+}
+
+.design-details-content {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 40px 20px;
+}
+
+.design-details-address {
+  font-size: 12px;
+  color: #666666;
+  margin-bottom: 8px;
+}
+
+.design-details-title {
+  font-size: 32px;
+  font-weight: bold;
+  color: #000000;
+  margin-bottom: 8px;
+}
+
+.design-details-description {
+  color: #000000;
+  font-size: 16px;
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+
+.design-details-match-badge {
+  display: inline-block;
+  background: #22c55e;
+  color: #ffffff;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  margin-right: 12px;
+  margin-bottom: 16px;
+}
+
+.design-details-match-text {
+  font-size: 14px;
+  color: #000000;
+  margin-bottom: 24px;
+}
+
+.design-details-section {
+  margin-bottom: 32px;
+}
+
+.design-details-section-title {
+  font-size: 20px;
+  font-weight: bold;
+  color: #000000;
+  margin-bottom: 16px;
+}
+
+.design-details-image {
+  width: 100%;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  margin-bottom: 16px;
+}
+
+.design-details-text {
+  color: #000000;
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.design-details-video-section {
+  background: linear-gradient(to bottom, #bfdbfe, #a5f3fc);
+  border-radius: 8px;
+  height: 256px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.design-details-play-button {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  padding: 12px 24px;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s;
+}
+
+.design-details-play-button:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.design-details-floor-plan-image {
+  width: 100%;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  margin-bottom: 16px;
+}
+
+.design-details-download-button {
+  background: transparent;
+  color: #ff6b4a;
+  border: 2px solid #ff6b4a;
+  padding: 10px 24px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s;
+}
+
+.design-details-download-button:hover {
+  background: #ff6b4a;
+  color: #ffffff;
+}
+
+.design-details-cost {
+  font-size: 24px;
+  font-weight: bold;
+  color: #000000;
+  margin-bottom: 8px;
+}
+
+.design-details-certification {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #000000;
+}
+
+.design-details-certification-icon {
+  width: 16px;
+  height: 16px;
+  color: #22c55e;
+}
+
+.design-details-insurance-text {
+  color: #000000;
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.design-details-electric-card {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.design-details-electric-title {
+  font-size: 16px;
+  font-weight: bold;
+  color: #000000;
+  margin-bottom: 4px;
+}
+
+.design-details-electric-text {
+  color: #000000;
+  font-size: 16px;
+}
+
+.design-details-architect {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.design-details-architect-avatar {
+  width: 64px;
+  height: 64px;
+  background: #d1d5db;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.design-details-architect-avatar img {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+}
+
+.design-details-architect-name {
+  font-size: 16px;
+  font-weight: bold;
+  color: #000000;
+  margin-bottom: 4px;
+}
+
+.design-details-architect-role {
+  font-size: 12px;
+  color: #000000;
+}
+
+.design-details-notes {
+  width: 100%;
+  background: #ffffff;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid #e5e5e5;
+  min-height: 100px;
+  font-size: 16px;
+  color: #000000;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.design-details-notes::placeholder {
+  color: #999999;
+}
+
+.design-details-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 32px;
+}
+
+.design-details-actions-primary {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.design-details-contact-button {
+  background: #3b82f6;
+  color: #ffffff;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.design-details-contact-button:hover {
+  background: #2563eb;
+}
+
+.design-details-save-button {
+  background: transparent;
+  color: #ff6b4a;
+  border: 2px solid #ff6b4a;
+  padding: 12px 24px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.design-details-save-button:hover {
+  background: #ff6b4a;
+  color: #ffffff;
+}
+
+.design-details-explore-button {
+  background: transparent;
+  color: #ff6b4a;
+  border: 2px solid #ff6b4a;
+  padding: 12px 24px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.design-details-explore-button:hover {
+  background: #ff6b4a;
+  color: #ffffff;
+}
+
+.design-details-chatbot {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 56px;
+  height: 56px;
+  background: #ff6b4a;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+}
+
+.design-details-chatbot:hover {
+  background: #ff5232;
+  transform: scale(1.05);
+}
+
+.design-details-chatbot svg {
+  width: 24px;
+  height: 24px;
+  color: #ffffff;
+}
+
+@media (min-width: 640px) {
+  .design-details-actions {
+    flex-direction: row;
+    justify-content: space-between;
+  }
+
+  .design-details-actions-primary {
+    flex-direction: row;
+  }
+}

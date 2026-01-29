@@ -2,6 +2,18 @@
 
 This guide outlines the recommended Git workflow for the Aldeia Chatbot project to ensure smooth collaboration and maintain code quality.
 
+## Summary
+
+1. **Always** work in feature branches, never directly in `develop`
+2. **Pull** latest changes before starting new work
+3. **Commit** frequently with clear messages
+4. **Push** regularly to backup your work
+5. **Create PR** when feature is complete
+6. **Get review** before merging
+7. **Clean up** branches after merging
+
+Following this workflow will keep the codebase clean, organized, and make collaboration smooth!
+
 ## Branch Strategy
 
 ### Main Branches
@@ -31,9 +43,9 @@ git checkout -b refactor/cleanup-nlp-service
 ### 1. Start Working on a Task
 
 ```bash
-# Make sure you're on main and up to date
-git checkout main
-git pull origin main
+# Make sure you're on development and up to date
+git checkout development
+git pull origin development
 
 # Create and switch to your feature branch
 git checkout -b feature/your-feature-name
@@ -82,18 +94,18 @@ git push
 
 ### 4. Keep Your Branch Updated
 
-If working on a long-running feature, periodically sync with main:
+If working on a long-running feature, periodically sync with dev:
 
 ```bash
 # Option 1: Rebase (cleaner history)
-git checkout main
-git pull origin main
+git checkout development
+git pull origin development
 git checkout feature/your-feature-name
-git rebase main
+git rebase development
 
 # Option 2: Merge (preserves history)
 git checkout feature/your-feature-name
-git merge main
+git merge development
 ```
 
 ### 5. Create a Pull Request (PR)
@@ -103,7 +115,7 @@ Once your feature is complete:
 1. Push your final changes
 2. Go to GitHub repository
 3. Click "Pull requests" → "New pull request"
-4. Select your branch to merge into `main`
+4. Select your branch to merge into `development`
 5. Add a descriptive title and description
 6. Request review from your colleague
 7. Link any related issues
@@ -146,11 +158,11 @@ Once approved:
 ### 8. Clean Up Local Branches
 
 ```bash
-# Switch back to main
-git checkout main
+# Switch back to development
+git checkout development
 
 # Pull the merged changes
-git pull origin main
+git pull origin development
 
 # Delete your local feature branch
 git branch -d feature/your-feature-name
@@ -164,8 +176,8 @@ git branch -D feature/your-feature-name
 ### Before Starting Work
 ```bash
 # Always pull latest changes first
-git checkout main
-git pull origin main
+git checkout development
+git pull origin development
 ```
 
 ### Communicate
@@ -241,6 +253,16 @@ git branch -a
 
 ## Running the Application Locally
 
+Redis, ChromaDB and Supabase should all be running in the development server (18.217.67.150)
+
+### Run the following to start the SSH tunnel (in a separate terminal, keep it open):
+
+```bash
+# ~/.ssh/aldeia-staging.pem is the suggested location for your SSH key
+
+ssh -i ~/.ssh/aldeia-staging.pem -L 6379:localhost:6379 -L 8000:localhost:8000 ubuntu@18.217.67.150
+```
+
 ### Backend (Port 3001)
 ```bash
 cd apps/backend
@@ -265,15 +287,3 @@ npm start
 - **Git issues**: Ask your colleague or check [Git documentation](https://git-scm.com/doc)
 - **Merge conflicts**: Pair program to resolve together
 - **Code questions**: Use PR comments for discussions
-
-## Summary
-
-1. **Always** work in feature branches, never directly in `main`
-2. **Pull** latest changes before starting new work
-3. **Commit** frequently with clear messages
-4. **Push** regularly to backup your work
-5. **Create PR** when feature is complete
-6. **Get review** before merging
-7. **Clean up** branches after merging
-
-Following this workflow will keep the codebase clean, organized, and make collaboration smooth!
