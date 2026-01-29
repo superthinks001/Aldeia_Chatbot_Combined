@@ -5,11 +5,20 @@
  */
 
 import { ChromaClient } from 'chromadb';
-import { pipeline } from '@xenova/transformers';
 
 let chromaClient: ChromaClient | null = null;
 let factCollection: any = null;
 let embedder: any = null;
+let pipelineFn: any = null;
+
+// Dynamically import @xenova/transformers (ESM module)
+async function getTransformers() {
+  if (!pipelineFn) {
+    const transformers = await import('@xenova/transformers');
+    pipelineFn = transformers.pipeline;
+  }
+  return pipelineFn;
+}
 
 // Initialize ChromaDB client and collection
 async function initializeChromaDB() {
@@ -18,8 +27,9 @@ async function initializeChromaDB() {
   }
 
   chromaClient = new ChromaClient();
-  
-  // Initialize embedding model
+
+  // Initialize embedding model using dynamic import
+  const pipeline = await getTransformers();
   embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
 
   // Get or create collection for verified facts
