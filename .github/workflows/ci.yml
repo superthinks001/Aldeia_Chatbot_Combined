@@ -271,8 +271,8 @@ jobs:
 
       - name: Run integration tests
         run: |
-          chmod +x test-phase6-simple.sh
-          ./test-phase6-simple.sh || echo "Integration tests failed (expected for CI)"
+          chmod +x scripts/testing/test-phase6-simple.sh
+          ./scripts/testing/test-phase6-simple.sh || echo "Integration tests failed (expected for CI)"
 
       - name: Stop backend server
         if: always()
