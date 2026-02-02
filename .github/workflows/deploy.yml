@@ -142,6 +142,9 @@ jobs:
     needs: [setup, build-and-push]
     environment:
       name: ${{ needs.setup.outputs.environment }}
+    permissions:
+      contents: read
+      packages: read
 
     steps:
       - name: Checkout code
