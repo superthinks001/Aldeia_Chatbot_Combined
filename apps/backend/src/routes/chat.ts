@@ -33,7 +33,7 @@ const biasLogPath = path.join(__dirname, '../../bias_fairness.log');
 (async () => {
   try {
     // Dynamically import @xenova/transformers to handle ES module
-    const { pipeline } = await import('@xenova/transformers');
+    const { pipeline } = await (new Function('return import("@xenova/transformers")'))();
     embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
     const chromaClient = new ChromaClient();
     collection = await chromaClient.getOrCreateCollection({
@@ -48,7 +48,7 @@ const biasLogPath = path.join(__dirname, '../../bias_fairness.log');
     console.warn('ChromaDB initialization failed, continuing without vector search:', error instanceof Error ? error.message : String(error));
     try {
       // Set embedder without ChromaDB for basic functionality
-      const { pipeline } = await import('@xenova/transformers');
+      const { pipeline } = await (new Function('return import("@xenova/transformers")'))();
       embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
     } catch (embedError) {
       console.error('Failed to initialize embedder:', embedError);

@@ -36,7 +36,8 @@ function chunkByParagraph(text: string): string[] {
 
 export async function reindexAllDocuments() {
   // Dynamically import @xenova/transformers to handle ES module
-  const { pipeline } = await import('@xenova/transformers');
+  // Use Function constructor to prevent TypeScript from converting to require()
+  const { pipeline } = await (new Function('return import("@xenova/transformers")'))();
 
   // Initialize MiniLM embedding pipeline
   const embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
