@@ -68,7 +68,7 @@ export async function reindexAllDocuments() {
         const chunk = chunks[i];
         // Generate embedding
         const embeddingTensor = await embedder(chunk, { pooling: 'mean', normalize: true });
-        const embedding = Array.from(embeddingTensor.data); // Convert Float32Array to number[]
+        const embedding = Array.from(embeddingTensor.data) as number[]; // Convert Float32Array to number[]
         // Store in ChromaDB
         await collection.add({
           ids: [`${path.basename(file)}_${i}`],

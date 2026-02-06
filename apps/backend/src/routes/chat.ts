@@ -461,7 +461,7 @@ router.post('/', async (req: Request, res: Response) => {
       contextText = message;
     }
     const embeddingTensor = await embedder(contextText, { pooling: 'mean', normalize: true });
-    const embedding = Array.from(embeddingTensor.data);
+    const embedding = Array.from(embeddingTensor.data) as number[];
     
     let matches = [];
     if (collection) {
@@ -821,7 +821,7 @@ router.post('/search', async (req: Request, res: Response) => {
     }
     // Generate embedding for the query
     const embeddingTensor = await embedder(query, { pooling: 'mean', normalize: true });
-    const embedding = Array.from(embeddingTensor.data);
+    const embedding = Array.from(embeddingTensor.data) as number[];
     // Query ChromaDB for top 5 most similar chunks
     const results = await collection.query({
       queryEmbeddings: [embedding],
