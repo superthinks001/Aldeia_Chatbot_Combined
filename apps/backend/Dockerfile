@@ -5,7 +5,7 @@
 # ============================================
 
 # Stage 1: Build
-FROM node:18-alpine AS builder
+FROM node:18-slim AS builder
 
 WORKDIR /workspace
 
@@ -28,13 +28,13 @@ RUN npm run build -w apps/backend
 
 # ============================================
 # Stage 2: Production
-FROM node:18-alpine AS production
+FROM node:18-slim AS production
 
-# Install dumb-init for proper signal handling
-RUN apk add --no-cache dumb-init curl
+# Install dumb-init for proper signal handling and curl for health checks
+RUN apt-get update && apt-get install -y --no-install-recommends dumb-init curl && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user for security
-RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
+RUN groupadd -g 1001 nodejs && useradd -u 1001 -g nodejs -s /bin/bash -m nodejs
 
 WORKDIR /workspace
 
