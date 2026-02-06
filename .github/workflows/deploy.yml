@@ -128,7 +128,7 @@ jobs:
           cache-to: type=gha,mode=max
           target: production
           build-args: |
-            REACT_APP_API_URL=${{ matrix.service == 'chatbot-frontend' && format('http://{0}:3001/api', secrets.SERVER_HOST) || '' }}
+            REACT_APP_API_URL=${{ matrix.service == 'chatbot-frontend' && '/api' || '' }}
 
       - name: Image digest
         run: echo "Image pushed with digest ${{ steps.meta.outputs.digest }}"
