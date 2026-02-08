@@ -5,7 +5,7 @@
 # ============================================
 
 # Stage 1: Build
-FROM node:18-slim AS builder
+FROM node:20-slim AS builder
 
 # Install build dependencies for native modules (sharp, etc.)
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -35,7 +35,7 @@ RUN npm run build -w apps/backend
 
 # ============================================
 # Stage 2: Production
-FROM node:18-slim AS production
+FROM node:20-slim AS production
 
 # Install dumb-init, curl, build tools, and runtime dependencies for sharp/native modules
 RUN apt-get update && apt-get install -y --no-install-recommends \

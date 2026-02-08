@@ -5,7 +5,7 @@
 # ============================================
 
 # Stage 1: Build
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 
 # Build argument for API URL (passed from docker build or GitHub Actions)
 ARG REACT_APP_API_URL=http://localhost:3001/api
