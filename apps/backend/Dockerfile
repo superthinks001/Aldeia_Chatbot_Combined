@@ -64,13 +64,17 @@ RUN npm ci --omit=dev && npm cache clean --force
 # Copy built application from builder stage
 COPY --from=builder --chown=nodejs:nodejs /workspace/apps/backend/dist ./apps/backend/dist
 
-# Create logs directory and transformers cache directory
+# Create logs directory and make transformers cache writable
 RUN mkdir -p /workspace/apps/backend/logs && chown -R nodejs:nodejs /workspace/apps/backend/logs
-RUN mkdir -p /workspace/.cache/transformers && chown -R nodejs:nodejs /workspace/.cache
 
-# Set transformers cache directory to writable location
-ENV TRANSFORMERS_CACHE=/workspace/.cache/transformers
-ENV HF_HOME=/workspace/.cache
+# Create cache directory inside node_modules for @xenova/transformers
+RUN mkdir -p /workspace/node_modules/@xenova/transformers/.cache && \
+    chown -R nodejs:nodejs /workspace/node_modules/@xenova/transformers/.cache
+
+# Also set environment variables as fallback
+ENV TRANSFORMERS_CACHE=/workspace/node_modules/@xenova/transformers/.cache
+ENV HF_HOME=/workspace/node_modules/@xenova/transformers/.cache
+ENV XDG_CACHE_HOME=/workspace/node_modules/@xenova/transformers/.cache
 
 # Switch to non-root user
 USER nodejs
