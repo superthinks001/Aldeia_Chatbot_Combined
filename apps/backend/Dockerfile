@@ -7,6 +7,13 @@
 # Stage 1: Build
 FROM node:18-slim AS builder
 
+# Install build dependencies for native modules (sharp, etc.)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /workspace
 
 # Copy workspace package files first (for better layer caching)
@@ -17,7 +24,7 @@ COPY apps/backend/package*.json ./apps/backend/
 COPY apps/chatbot-frontend/package*.json ./apps/chatbot-frontend/
 COPY packages/ ./packages/
 
-# Install all workspace dependencies
+# Install all workspace dependencies and rebuild native modules
 RUN npm ci
 
 # Copy all source code
@@ -30,8 +37,15 @@ RUN npm run build -w apps/backend
 # Stage 2: Production
 FROM node:18-slim AS production
 
-# Install dumb-init for proper signal handling and curl for health checks
-RUN apt-get update && apt-get install -y --no-install-recommends dumb-init curl && rm -rf /var/lib/apt/lists/*
+# Install dumb-init, curl, build tools, and runtime dependencies for sharp/native modules
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    dumb-init \
+    curl \
+    libvips42 \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user for security
 RUN groupadd -g 1001 nodejs && useradd -u 1001 -g nodejs -s /bin/bash -m nodejs
@@ -44,8 +58,8 @@ COPY apps/backend/package*.json ./apps/backend/
 COPY apps/chatbot-frontend/package*.json ./apps/chatbot-frontend/
 COPY packages/ ./packages/
 
-# Install production dependencies for the entire workspace
-RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+# Install production dependencies (without --ignore-scripts to build native modules)
+RUN npm ci --omit=dev && npm cache clean --force
 
 # Copy built application from builder stage
 COPY --from=builder --chown=nodejs:nodejs /workspace/apps/backend/dist ./apps/backend/dist

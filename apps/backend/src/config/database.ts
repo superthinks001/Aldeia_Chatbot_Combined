@@ -47,8 +47,8 @@ export async function testConnection(): Promise<boolean> {
       // In test mode, use the healthCheck from the database connection module
       const { healthCheck } = await import('../database/connection');
       const result = await healthCheck();
-      if (result) {
-        console.log('✅ PostgreSQL connection successful (direct mode)');
+      if (!result) {
+        console.error('❌ PostgreSQL connection failed (direct mode)');
       }
       return result;
     } catch (error) {
@@ -68,7 +68,7 @@ export async function testConnection(): Promise<boolean> {
       return false;
     }
 
-    console.log('✅ PostgreSQL/Supabase connection successful');
+    // Only log failures, not successes (to avoid log spam from health checks)
     return true;
 
   } catch (error) {
