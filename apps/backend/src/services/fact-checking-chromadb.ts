@@ -27,7 +27,18 @@ async function initializeChromaDB() {
     return { chromaClient, factCollection, embedder };
   }
 
-  chromaClient = new ChromaClient();
+  // Configure ChromaDB client with host and auth from environment
+  const chromaHost = process.env.CHROMA_HOST || 'localhost';
+  const chromaPort = process.env.CHROMA_PORT || '8000';
+  const chromaAuthToken = process.env.CHROMA_AUTH_TOKEN;
+
+  chromaClient = new ChromaClient({
+    path: `http://${chromaHost}:${chromaPort}`,
+    auth: chromaAuthToken ? {
+      provider: 'token',
+      credentials: chromaAuthToken
+    } : undefined
+  });
 
   // Initialize embedding model using dynamic import
   const pipeline = await getTransformers();

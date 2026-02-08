@@ -42,8 +42,18 @@ export async function reindexAllDocuments() {
   // Initialize MiniLM embedding pipeline
   const embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
 
-  // Initialize ChromaDB client and collection
-  const chromaClient = new ChromaClient();
+  // Initialize ChromaDB client with host and auth from environment
+  const chromaHost = process.env.CHROMA_HOST || 'localhost';
+  const chromaPort = process.env.CHROMA_PORT || '8000';
+  const chromaAuthToken = process.env.CHROMA_AUTH_TOKEN;
+
+  const chromaClient = new ChromaClient({
+    path: `http://${chromaHost}:${chromaPort}`,
+    auth: chromaAuthToken ? {
+      provider: 'token',
+      credentials: chromaAuthToken
+    } : undefined
+  });
   const collection = await chromaClient.getOrCreateCollection({
     name: 'fire_recovery_chunks',
     metadata: { description: 'Paragraph chunks from LA/Pasadena County fire recovery PDFs' },

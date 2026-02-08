@@ -35,7 +35,19 @@ const biasLogPath = path.join(__dirname, '../../bias_fairness.log');
     // Dynamically import @xenova/transformers to handle ES module
     const { pipeline } = await (new Function('return import("@xenova/transformers")'))();
     embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
-    const chromaClient = new ChromaClient();
+
+    // Configure ChromaDB client with host and auth from environment
+    const chromaHost = process.env.CHROMA_HOST || 'localhost';
+    const chromaPort = process.env.CHROMA_PORT || '8000';
+    const chromaAuthToken = process.env.CHROMA_AUTH_TOKEN;
+
+    const chromaClient = new ChromaClient({
+      path: `http://${chromaHost}:${chromaPort}`,
+      auth: chromaAuthToken ? {
+        provider: 'token',
+        credentials: chromaAuthToken
+      } : undefined
+    });
     collection = await chromaClient.getOrCreateCollection({
       name: 'fire_recovery_chunks',
       metadata: { description: 'Paragraph chunks from LA/Pasadena County fire recovery PDFs' },
