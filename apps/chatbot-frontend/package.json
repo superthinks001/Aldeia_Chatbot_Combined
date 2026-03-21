@@ -9,8 +9,6 @@
     "lint": "eslint src --ext .ts,.tsx"
   },
   "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-aspect-ratio": "^1.1.7",
@@ -51,9 +49,12 @@
     "input-otp": "^1.4.2",
     "lucide-react": "^0.544.0",
     "next-themes": "^0.4.6",
+    "react": "^18.3.1",
     "react-day-picker": "^9.11.0",
+    "react-dom": "^18.3.1",
     "react-hook-form": "^7.63.0",
     "react-i18next": "^16.2.4",
+    "react-markdown": "^10.1.0",
     "react-resizable-panels": "^3.0.6",
     "recharts": "^3.2.1",
     "socket.io-client": "^4.8.1",

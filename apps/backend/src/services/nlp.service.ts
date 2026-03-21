@@ -311,18 +311,18 @@ export function extractEntities(message: string, context?: any): IntentResult['e
  * Detect if query is ambiguous
  */
 function detectAmbiguity(message: string, primaryIntent: string, confidence: number, secondaryIntents: string[]): boolean {
-  // Low confidence threshold - lowered to be less aggressive
-  if (confidence < 0.35) return true;
-
-  // Very short messages (only 1-2 words)
+  // Very short messages (only 1-2 words) are genuinely ambiguous
   if (message.trim().split(/\s+/).length < 2) return true;
 
-  // Multiple high-scoring intents (conflict) - only if confidence is very low
-  if (secondaryIntents.length >= 2 && confidence < 0.60) return true;
+  // Only flag as ambiguous if confidence is truly negligible.
+  // The scoring formula divides keyword matches by total keywords
+  // per intent, so even well-formed questions rarely exceed 0.3.
+  if (confidence < 0.10) return true;
 
-  // Vague language - only if very short AND vague
-  const vaguePatterns = [/^what|^how|^tell|^give/i];
-  if (vaguePatterns.some(p => p.test(message.trim())) && message.split(' ').length < 4) return true;
+  // Vague language — only for very short messages (< 4 words)
+  // that start with generic question words
+  const vaguePatterns = [/^what$|^how$|^tell$|^give$/i];
+  if (vaguePatterns.some(p => p.test(message.trim().split(/\s+/)[0])) && message.split(' ').length < 3) return true;
 
   return false;
 }

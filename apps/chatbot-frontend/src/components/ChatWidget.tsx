@@ -36,6 +36,9 @@ const ChatWidget: React.FC = () => {
   const [handoffDialogOpen, setHandoffDialogOpen] = useState(false);
   const [handoffData, setHandoffData] = useState<any>(null);
 
+  // Feature 2/3: Upload and URL status
+  const [uploadStatus, setUploadStatus] = useState<string>('');
+
   // Voice and Socket features
   const [isVoiceEnabled, setIsVoiceEnabled] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -233,7 +236,66 @@ const ChatWidget: React.FC = () => {
     }
   }, [currentStep, user, pageContext, userLanguage]);
 
-  const handleSendMessage = async (message: string) => {
+  // Feature 2: Handle document upload
+  const handleFileUpload = async (file: File) => {
+    if (!conversationId) return;
+
+    setUploadStatus(`Processing ${file.name}...`);
+    setMessages(prev => [...prev, {
+      sender: 'system' as const,
+      text: `Uploading document: ${file.name}...`,
+      timestamp: new Date()
+    }]);
+
+    try {
+      const response = await api.uploadChatDocument(conversationId, file);
+      const { filename, chunkCount } = response.data;
+      setMessages(prev => [...prev, {
+        sender: 'system' as const,
+        text: `Document "${filename}" processed (${chunkCount} chunks). You can now ask questions about it.`,
+        timestamp: new Date()
+      }]);
+      setUploadStatus('');
+    } catch (error: any) {
+      const errMsg = error.response?.data?.error || 'Failed to upload document';
+      setMessages(prev => [...prev, {
+        sender: 'system' as const,
+        text: `Upload failed: ${errMsg}`,
+        timestamp: new Date()
+      }]);
+      setUploadStatus('');
+    }
+  };
+
+  // Feature 3: Handle URL add
+  const handleUrlAdd = async (url: string) => {
+    if (!conversationId) return;
+
+    setMessages(prev => [...prev, {
+      sender: 'system' as const,
+      text: `Scraping ${new URL(url).hostname}...`,
+      timestamp: new Date()
+    }]);
+
+    try {
+      const response = await api.addChatUrl(conversationId, url);
+      const { title, chunkCount } = response.data;
+      setMessages(prev => [...prev, {
+        sender: 'system' as const,
+        text: `Website "${title || url}" processed (${chunkCount} chunks). You can now ask questions about it.`,
+        timestamp: new Date()
+      }]);
+    } catch (error: any) {
+      const errMsg = error.response?.data?.error || 'Failed to scrape URL';
+      setMessages(prev => [...prev, {
+        sender: 'system' as const,
+        text: `URL scraping failed: ${errMsg}`,
+        timestamp: new Date()
+      }]);
+    }
+  };
+
+  const handleSendMessage = async (message: string, isPromptTemplate?: boolean) => {
     if (!message.trim()) return;
 
     // Stop typing indicator
@@ -278,6 +340,7 @@ const ChatWidget: React.FC = () => {
         rebuildStepContext: stepContext.description,
         conversationId: conversationId || undefined,
         isFirstMessage: messages.length === 0,
+        isPromptTemplate: isPromptTemplate || false,
         context: pageContext ? {
           headings: pageContext.headings.h1.concat(pageContext.headings.h2).join(', '),
           keywords: pageContext.keywords.slice(0, 10).join(', '),
@@ -332,10 +395,44 @@ const ChatWidget: React.FC = () => {
         handoffPriority: response.data.handoffPriority,
         handoffMessage: response.data.handoffMessage,
         handoffContact: response.data.handoffContact,
-        handoffExpert: response.data.handoffExpert
+        handoffExpert: response.data.handoffExpert,
+
+        // Feature 5: Source info for chunk-level feedback
+        source: response.data.source,
+        chunk_index: response.data.chunk_index
       };
 
       setMessages(prev => [...prev, botMessage]);
+
+      // Handle site actions (navigation, uploads, preferences)
+      if (response.data.siteAction?.frontendAction) {
+        const { type, payload } = response.data.siteAction.frontendAction;
+        switch (type) {
+          case 'navigate':
+            // Try postMessage for iframe embedding, fallback to direct navigation
+            if (window.parent !== window) {
+              window.parent.postMessage({ type: 'ALDEIA_NAVIGATE', payload }, '*');
+            } else {
+              window.location.href = payload.path;
+            }
+            break;
+          case 'upload_prompt':
+            if (window.parent !== window) {
+              window.parent.postMessage({ type: 'ALDEIA_UPLOAD_PROMPT', payload }, '*');
+            }
+            break;
+          case 'update_state':
+            if (window.parent !== window) {
+              window.parent.postMessage({ type: 'ALDEIA_UPDATE_STATE', payload }, '*');
+            }
+            break;
+          case 'open_modal':
+            if (window.parent !== window) {
+              window.parent.postMessage({ type: 'ALDEIA_OPEN_MODAL', payload }, '*');
+            }
+            break;
+        }
+      }
 
       // Sprint 3: Update notifications
       if (response.data.notifications && response.data.notifications.length > 0) {
@@ -576,8 +673,8 @@ const ChatWidget: React.FC = () => {
           {/* Prompt Templates */}
           {showPromptTemplates && (
             <PromptTemplates
-              onSelectTemplate={(prompt) => {
-                handleSendMessage(prompt);
+              onSelectTemplate={(prompt, isTemplate) => {
+                handleSendMessage(prompt, isTemplate);
               }}
               currentStep={currentStep}
               onHide={() => setShowPromptTemplates(false)}
@@ -764,6 +861,8 @@ const ChatWidget: React.FC = () => {
                     onClick={() => {
                       if (suggestion.url) {
                         window.open(suggestion.url, '_blank');
+                      } else {
+                        handleSendMessage(`Tell me about: ${suggestion.title}${suggestion.description ? ' - ' + suggestion.description : ''}`);
                       }
                     }}
                     onMouseEnter={(e) => {
@@ -807,7 +906,14 @@ const ChatWidget: React.FC = () => {
           )}
 
           <div style={{ flexShrink: 0 }}>
-            <InputBox onSend={handleSendMessage} disabled={loading} conversationId={conversationId} />
+            <InputBox
+              onSend={handleSendMessage}
+              disabled={loading}
+              conversationId={conversationId}
+              onFileUpload={handleFileUpload}
+              onUrlAdd={handleUrlAdd}
+              uploadStatus={uploadStatus}
+            />
           </div>
 
           {/* Voice Controls and Play Sound Section - Side by Side */}

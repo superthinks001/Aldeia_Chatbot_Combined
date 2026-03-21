@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { ChromaClient } from 'chromadb';
 import fs from 'fs';
 import path from 'path';
+import multer from 'multer';
 import { ConversationsService } from '../services/conversations.service';
 import { AnalyticsService } from '../services/analytics.service';
 import { findAllPDFs, extractTextFromPDF, reindexAllDocuments } from '../document_ingest';
@@ -20,6 +21,22 @@ import { getUserSuggestions } from '../services/interest-suggestions.service';
 import { logAuditEvent, AuditEventType, AuditSeverity } from '../services/audit-trail.service';
 // Correction deployment
 import { getCorrections } from '../services/correction-deployment.service';
+// Feature 1: LLM Conversational Responses
+import { generateConversationalResponse, isLLMAvailable, assessDocumentAdequacy } from '../services/llm-response.service';
+// Feature 1/2/3: Session Store
+import { getSession, updateSession, addToHistory } from '../services/session-store.service';
+// Feature 5: Feedback Weights
+import { recordChunkFeedback, getChunkWeights, buildChunkId } from '../services/feedback-weight.service';
+// Feature 2/3: Embedding Search
+import { searchLocalEmbeddings, mergeSearchResults, SearchMatch } from '../utils/embedding-search';
+// Feature 2: Document Parser
+import { parseDocument } from '../services/document-parser.service';
+// Feature 3: URL Scraper
+import { scrapeUrl } from '../services/url-scraper.service';
+// Conversational Formatter (no API key needed)
+import { formatConversationalResponse } from '../services/conversational-formatter.service';
+// Site Actions (navigation, uploads, preferences from chatbot)
+import { detectSiteAction } from '../services/site-actions.service';
 
 const router = Router();
 
@@ -116,28 +133,35 @@ function detectBias(message: string): boolean {
   return analysis.detected;
 }
 
-// Improved ambiguity detection
+// Improved ambiguity detection — deliberately lenient to avoid
+// blocking legitimate fire-recovery questions. The NLP service
+// already scores and classifies intents; this is a last-resort gate.
 function detectAmbiguity(message: string, intent: string): boolean {
-  const msg = message.toLowerCase();
   if (intent === 'ambiguous') return true;
-  if (message.trim().split(' ').length < 3) return true;
-  // Conflicting intents: e.g., both 'where' and 'how', or 'legal' and 'financial'
-  const intentPatterns = [
-    /where/, /how/, /legal|law|regulation/, /money|cost|fee|financial/, /support|counseling|mental/, /eligible|eligibility/, /contact|phone|email/, /feedback|complaint/
-  ];
-  let matches = 0;
-  for (const pat of intentPatterns) {
-    if (pat.test(msg)) matches++;
-  }
-  if (matches > 1) return true;
-  // Vague queries
-  if (/thing|stuff|info|information|details|something|anything/.test(msg) && msg.split(' ').length < 6) return true;
+  // Only flag very short messages (1-2 words)
+  if (message.trim().split(/\s+/).length < 2) return true;
   return false;
 }
 
-// In-memory context tracking (for demo; use Redis/db for production)
-const conversationContexts: Record<string, any> = {};
+// Session store replaces in-memory conversationContexts (Feature 1)
+// Sessions are managed by session-store.service.ts with TTL auto-cleanup
 const MAX_HISTORY = 5;
+
+// Multer for in-chat document upload (Feature 2)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  fileFilter: (_req, file, cb) => {
+    const allowedMimes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'];
+    const allowedExts = ['.pdf', '.docx', '.txt'];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowedMimes.includes(file.mimetype) && allowedExts.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF, DOCX, and TXT files are accepted'));
+    }
+  }
+});
 
 // Enhanced response formatting with ethical AI principles
 function formatResponse(answer: string, source: string, bias: boolean): string {
@@ -288,12 +312,20 @@ router.post('/', async (req: Request, res: Response) => {
   const userEmail = req.user?.email || null;
   const isRebuildFlow = req.body.rebuildStep && ['landing', 'location', 'preferences-style', 'preferences-needs', 'inspiration', 'budget', 'matches', 'details'].includes(req.body.rebuildStep);
 
-  let { message, context, pageUrl, isFirstMessage, conversationId, userProfile, rebuildStep, rebuildStepContext } = req.body;
+  let { message, context, pageUrl, isFirstMessage, conversationId, userProfile, rebuildStep, rebuildStepContext, isPromptTemplate } = req.body;
   // Sanitize all user input
   message = typeof message === 'string' ? sanitizeInput(message) : '';
   context = typeof context === 'string' ? sanitizeInput(context) : (typeof context === 'object' ? context : {});
   pageUrl = typeof pageUrl === 'string' ? sanitizeInput(pageUrl) : '';
   isFirstMessage = Boolean(isFirstMessage);
+  // conversationId may be nested inside context (frontend sends it there)
+  if (!conversationId && typeof context === 'object' && context?.conversationId) {
+    conversationId = context.conversationId;
+  }
+  // isPromptTemplate may also be nested inside context
+  if (!isPromptTemplate && typeof context === 'object' && context?.isPromptTemplate) {
+    isPromptTemplate = context.isPromptTemplate;
+  }
   conversationId = typeof conversationId === 'string' ? conversationId : null;
   
   // Add rebuild step context to context object
@@ -328,8 +360,9 @@ router.post('/', async (req: Request, res: Response) => {
     }
   }
 
-  // Track context for conversation
-  let convContext = conversationId ? (conversationContexts[conversationId] || { history: [] }) : { history: [] };
+  // Track context for conversation using session store (Feature 1)
+  const sessionId = conversationId || `anon-${Date.now()}`;
+  const convContext = getSession(sessionId);
   if (context) {
     convContext.pageContext = context;
     if (rebuildStep) {
@@ -347,7 +380,7 @@ router.post('/', async (req: Request, res: Response) => {
   if (message) convContext.history.push({ sender: 'user', text: message });
   // Limit history length
   if (convContext.history.length > MAX_HISTORY) convContext.history = convContext.history.slice(-MAX_HISTORY);
-  if (conversationId) conversationContexts[conversationId] = convContext;
+  updateSession(sessionId, convContext);
 
   // Personalized greeting
   function getPersonalizedGreeting() {
@@ -408,15 +441,26 @@ router.post('/', async (req: Request, res: Response) => {
     }
     // Note: collection (ChromaDB) is optional - fallback logic exists below
     
+    // If user has session-local content (uploaded docs / scraped URLs),
+    // skip the ambiguity check — the question likely relates to that content,
+    // not to the fire-recovery domain.
+    const hasSessionContent = (convContext.uploadedDocChunks && convContext.uploadedDocChunks.length > 0)
+      || (convContext.scrapedUrlChunks && convContext.scrapedUrlChunks.length > 0);
+
     // If ambiguous, still try to provide helpful response based on intent
-    // Only skip to clarification if confidence is extremely low (< 0.3)
-    if (ambiguous && intentResult.confidence < 0.3) {
+    // Only skip to clarification if confidence is extremely low (< 0.15)
+    // AND the message is not from a prompt template
+    // AND the user has no session-local content to search
+    // NOTE: The NLP scoring formula produces inherently low values (keyword
+    // matches divided by large keyword lists), so the threshold must be very
+    // low to avoid blocking valid fire-recovery questions.
+    if (ambiguous && intentResult.confidence < 0.15 && !isPromptTemplate && !hasSessionContent) {
       // Only for very unclear messages, ask for clarification
       const clarificationText = "I'd love to help you, but I'm not quite sure what you're asking. Could you please provide more details? For example:\n\n- Are you asking about the rebuilding process?\n- Do you need information about permits?\n- Are you looking for debris removal services?\n- Do you need financial assistance information?\n\nPlease provide more details and I'll be happy to help!";
 
       // Add bot clarification to history
       convContext.history.push({ sender: 'bot', text: clarificationText });
-      if (conversationId) conversationContexts[conversationId] = convContext;
+      updateSession(sessionId, convContext);
 
       // Store user message and bot clarification in database
       if (conversation && conversationId) {
@@ -451,26 +495,97 @@ router.post('/', async (req: Request, res: Response) => {
     }
     // If ambiguous but confidence >= 0.3, continue with intent-based response below
     
+    // Feature 3: Auto-detect URLs in message and scrape them
+    let messageForQuery = message;
+    const urlRegex = /https?:\/\/[^\s]+/gi;
+    const detectedUrls = message.match(urlRegex);
+    let urlsScrapedSuccessfully = false;
+    let scrapedUrlTitles: string[] = [];
+    if (detectedUrls && detectedUrls.length > 0) {
+      for (const url of detectedUrls.slice(0, 3)) {
+        try {
+          const scraped = await scrapeUrl(url);
+          if (scraped.chunks.length > 0 && embedder) {
+            const scrapedChunks = [];
+            for (let ci = 0; ci < scraped.chunks.length; ci++) {
+              const chunkEmb = await embedder(scraped.chunks[ci], { pooling: 'mean', normalize: true });
+              scrapedChunks.push({
+                text: scraped.chunks[ci],
+                embedding: Array.from(chunkEmb.data) as number[],
+                source: scraped.title || url,
+                sourceType: 'scraped_url' as const,
+                chunkIndex: ci,
+                metadata: { url, scrapedAt: scraped.scrapedAt }
+              });
+            }
+            // Store in session (NOT DB)
+            const existingScraped = convContext.scrapedUrlChunks || [];
+            convContext.scrapedUrlChunks = [...existingScraped, ...scrapedChunks];
+            updateSession(sessionId, convContext);
+            urlsScrapedSuccessfully = true;
+            scrapedUrlTitles.push(scraped.title || url);
+          }
+          // Remove URL from query text so it doesn't confuse the search
+          messageForQuery = messageForQuery.replace(url, '').trim();
+        } catch (scrapeErr) {
+          console.warn('URL scrape failed:', scrapeErr instanceof Error ? scrapeErr.message : scrapeErr);
+        }
+      }
+
+      // If the message was ONLY a URL (no remaining question text), return a
+      // confirmation response immediately — no need to run ChromaDB search or handoff.
+      if (!messageForQuery && urlsScrapedSuccessfully) {
+        const titles = scrapedUrlTitles.join(', ');
+        const confirmText = `I've processed the website "${titles}". The content is now available for me to reference. What would you like to know about it?`;
+        convContext.history.push({ sender: 'bot', text: confirmText });
+        updateSession(sessionId, convContext);
+
+        if (conversation && conversationId) {
+          await ConversationsService.addMessage(conversationId, 'user', message, { intent, entities });
+          await ConversationsService.addMessage(conversationId, 'bot', confirmText, { intent, confidence: 1.0, grounded: true });
+        }
+
+        return res.json({
+          response: confirmText,
+          confidence: 1.0,
+          bias: false,
+          uncertainty: false,
+          context: context || null,
+          grounded: true,
+          hallucination: false,
+          intent: 'url_ingestion',
+          entities,
+          history: convContext.history
+        });
+      }
+
+      // If there's remaining query text, use it; otherwise fall back to original
+      if (!messageForQuery) messageForQuery = message;
+    }
+
     // Generate embedding for the user message, including last N turns as context
     let contextText = '';
     if (convContext.history && convContext.history.length > 1) {
       // Use last 3 turns (user+bot) as context
       const lastTurns = convContext.history.slice(-3).map((turn: any) => `${turn.sender}: ${turn.text}`).join(' | ');
-      contextText = lastTurns + ' | ' + message;
+      contextText = lastTurns + ' | ' + messageForQuery;
     } else {
-      contextText = message;
+      contextText = messageForQuery;
     }
     const embeddingTensor = await embedder(contextText, { pooling: 'mean', normalize: true });
-    const embedding = Array.from(embeddingTensor.data);
-    
-    let matches = [];
+    const embedding = Array.from(embeddingTensor.data) as number[];
+
+    // Feature 4: Prompt templates get more results
+    const nResults = isPromptTemplate ? 7 : 3;
+
+    let matches: any[] = [];
     if (collection) {
-      // Query ChromaDB for top 3 most similar chunks
+      // Query ChromaDB for top N most similar chunks
       const results = await collection.query({
         queryEmbeddings: [embedding],
-        nResults: 3
+        nResults
       });
-      // Log top 3 matches for debugging
+      // Log top matches for debugging
       for (let i = 0; i < Math.min(3, results.documents[0].length); i++) {
         const m = results.documents[0][i];
         console.log(`Match ${i + 1}:`, m.slice(0, 100), '| Source:', results.metadatas[0][i]?.source, '| Distance:', results.distances[0][i]);
@@ -479,20 +594,111 @@ router.post('/', async (req: Request, res: Response) => {
         text,
         source: results.metadatas[0][i]?.source,
         chunk_index: results.metadatas[0][i]?.chunk_index,
-        distance: results.distances[0][i]
+        distance: results.distances[0][i],
+        source_type: 'main'
       }));
     } else {
       console.log('ChromaDB not available, providing general response');
     }
+
+    // Feature 5: Apply feedback weights to adjust distances
+    if (matches.length > 0) {
+      const chunkIds = matches.map((m: any) => buildChunkId(m.source, m.chunk_index));
+      try {
+        const weights = await getChunkWeights(chunkIds);
+        for (const m of matches) {
+          const cid = buildChunkId(m.source, m.chunk_index);
+          const weight = weights.get(cid) || 1.0;
+          if (m.distance !== undefined) {
+            m.distance = m.distance / weight; // lower distance = better rank
+          }
+        }
+        // Re-sort after applying weights
+        matches.sort((a: any, b: any) => (a.distance ?? 2) - (b.distance ?? 2));
+      } catch (weightErr) {
+        console.warn('Feedback weights fetch failed, using raw distances:', weightErr);
+      }
+    }
+
+    // Feature 2/3: Search session-local chunks (uploaded docs + scraped URLs)
+    // Skip session-local chunks for prompt templates — templates should answer
+    // from the main Aldeia knowledge base, not user-provided content
+    if (!isPromptTemplate) {
+      // Prioritize uploaded docs over scraped URLs (most recent action first)
+      const uploadedChunks = convContext.uploadedDocChunks || [];
+      const scrapedChunks = convContext.scrapedUrlChunks || [];
+      const localChunks = [...uploadedChunks, ...scrapedChunks];
+
+      if (localChunks.length > 0) {
+        const localMatches = searchLocalEmbeddings(embedding, localChunks, 5);
+        const localAsMatches = localMatches.map(lm => ({
+          text: lm.text,
+          source: lm.source,
+          chunk_index: lm.chunkIndex,
+          distance: lm.distance,
+          source_type: lm.sourceType
+        }));
+
+        if (localAsMatches.length > 0) {
+          // When user has session-local content, boost local results by reducing
+          // their distance so they rank ahead of generic ChromaDB results.
+          // This ensures questions about uploaded/scraped content get answered
+          // from that content rather than the fire-recovery knowledge base.
+          const boostedLocal = localAsMatches.map(m => ({
+            ...m,
+            distance: Math.max(0, (m.distance ?? 1) * 0.5) // boost by halving distance
+          }));
+
+          const allMatches = [...boostedLocal, ...matches];
+          allMatches.sort((a: any, b: any) => (a.distance ?? 2) - (b.distance ?? 2));
+          matches = allMatches.slice(0, nResults + 3);
+        }
+      }
+    }
+
     // Check if the top match is good enough
     if (!matches.length || matches[0].distance === undefined || matches[0].distance > 2.0) {
       // Generate intent-based response when no good matches found
-      const intentBasedResponse = generateIntentBasedResponse(intent, message, entities);
-      
+      let intentBasedResponse = generateIntentBasedResponse(intent, message, entities);
+
+      // Feature 1: Pass through LLM if available for more natural tone,
+      // otherwise use conversational formatter
+      if (isLLMAvailable()) {
+        try {
+          const llmResult = await generateConversationalResponse({
+            userMessage: message,
+            retrievedChunks: [], // no good matches
+            conversationHistory: convContext.history,
+            intent,
+            entities,
+            confidence: 0.3,
+            userProfile: convContext.userProfile,
+            sessionId
+          });
+          intentBasedResponse = llmResult.conversationalResponse;
+        } catch (llmErr) {
+          console.warn('LLM fallback for intent response failed:', llmErr);
+          // Keep the template-based response
+        }
+      } else {
+        // Use conversational formatter for natural tone without API key
+        intentBasedResponse = formatConversationalResponse({
+          rawAnswer: intentBasedResponse,
+          source: '',
+          intent,
+          entities,
+          confidence: 0.3,
+          conversationHistory: convContext.history,
+          biasDetected: false,
+          reliability: 'unverified',
+          userQuestion: message
+        });
+      }
+
       // Add to conversation history
       convContext.history.push({ sender: 'bot', text: intentBasedResponse });
-      if (conversationId) conversationContexts[conversationId] = convContext;
-      
+      updateSession(sessionId, convContext);
+
       // Store in database if conversation exists
       if (conversation && conversationId) {
         await ConversationsService.addMessage(conversationId, 'user', message, {
@@ -506,7 +712,7 @@ router.post('/', async (req: Request, res: Response) => {
           grounded: false
         });
       }
-      
+
       return res.json({
         response: intentBasedResponse,
         confidence: 0.6,
@@ -535,13 +741,26 @@ router.post('/', async (req: Request, res: Response) => {
     } else {
       answer = selected.text;
     }
-    
-    // Sprint 2: Fact-checking the AI response
-    const factCheckResult = await factCheck(answer, {
-      location: entities.location || context?.location,
-      topic: entities.topic || context?.topic,
-      intent
-    });
+
+    // Sprint 2: Fact-checking the AI response (wrapped in try/catch for ChromaDB unavailability)
+    let factCheckResult: any;
+    try {
+      factCheckResult = await factCheck(answer, {
+        location: entities.location || context?.location,
+        topic: entities.topic || context?.topic,
+        intent
+      });
+    } catch (factCheckErr) {
+      console.warn('Fact-check failed (ChromaDB may be unavailable):', factCheckErr instanceof Error ? factCheckErr.message : factCheckErr);
+      factCheckResult = {
+        verified: false,
+        reliability: 'unverified' as const,
+        hallucinationRisk: 0,
+        sources: [],
+        conflicts: [],
+        recommendations: ['Fact-checking unavailable — verify information with official sources']
+      };
+    }
 
     // Sprint 2: Apply bias correction if needed and bias score is high
     let correctedAnswer = answer;
@@ -550,8 +769,73 @@ router.post('/', async (req: Request, res: Response) => {
       console.log('Applied bias correction:', { original: answer.slice(0, 100), corrected: correctedAnswer.slice(0, 100) });
     }
 
-    // Use enhanced response formatting
-    const reply = formatResponse(correctedAnswer, selected.source, bias);
+    // Feature 1: Generate conversational response via LLM, with fallback
+    let reply: string;
+    if (isLLMAvailable()) {
+      try {
+        const llmResult = await generateConversationalResponse({
+          userMessage: message,
+          retrievedChunks: matches.slice(0, 5).map((m: any) => ({
+            text: m.text,
+            source: m.source,
+            distance: m.distance,
+            sourceType: m.source_type
+          })),
+          conversationHistory: convContext.history,
+          intent,
+          entities,
+          confidence,
+          userProfile: convContext.userProfile,
+          sessionId
+        });
+        reply = llmResult.conversationalResponse;
+      } catch (llmErr) {
+        console.warn('LLM response generation failed, falling back to conversational formatter:', llmErr);
+        reply = formatConversationalResponse({
+          rawAnswer: correctedAnswer,
+          source: selected.source,
+          intent,
+          entities,
+          confidence,
+          conversationHistory: convContext.history,
+          biasDetected: bias,
+          reliability: factCheckResult.reliability,
+          additionalSources: matches.slice(1, 4).map((m: any) => m.source),
+          userQuestion: message
+        });
+      }
+    } else {
+      // Fallback: use conversational formatter (no API key needed)
+      reply = formatConversationalResponse({
+        rawAnswer: correctedAnswer,
+        source: selected.source,
+        intent,
+        entities,
+        confidence,
+        conversationHistory: convContext.history,
+        biasDetected: bias,
+        reliability: factCheckResult.reliability,
+        additionalSources: matches.slice(1, 4).map((m: any) => m.source),
+        userQuestion: message
+      });
+    }
+
+    // Feature 4: LLM adequacy check for prompt templates
+    let llmAdequacyScore: number | undefined;
+    let documentMatchQuality: number | undefined;
+    if (isPromptTemplate) {
+      documentMatchQuality = confidence;
+      if (isLLMAvailable()) {
+        try {
+          llmAdequacyScore = await assessDocumentAdequacy(
+            message,
+            matches.slice(0, 7).map((m: any) => ({ text: m.text, source: m.source }))
+          );
+        } catch {
+          llmAdequacyScore = undefined;
+        }
+      }
+    }
 
     // Log bias if detected with enhanced details
     if (bias) {
@@ -576,7 +860,7 @@ router.post('/', async (req: Request, res: Response) => {
     }
     // Add bot reply to history
     convContext.history.push({ sender: 'bot', text: reply });
-    if (conversationId) conversationContexts[conversationId] = convContext;
+    updateSession(sessionId, convContext);
 
     // Find alternative perspectives (other sources)
     const alternatives = [];
@@ -605,14 +889,26 @@ router.post('/', async (req: Request, res: Response) => {
       viewedSuggestions: convContext.viewedSuggestions || []
     });
 
-    // Sprint 2: Enhanced human handoff detection
+    // Sprint 2: Enhanced human handoff detection (Feature 4: with adequacy data)
+    // Feature 2/3: If user has provided their own content (uploaded docs or scraped URLs)
+    // and local matches are present, suppress LOW_CONFIDENCE handoff — the user is
+    // feeding content and asking questions about it, not seeking expert help.
+    const hasUserContent = (convContext.uploadedDocChunks && convContext.uploadedDocChunks.length > 0)
+      || (convContext.scrapedUrlChunks && convContext.scrapedUrlChunks.length > 0)
+      || urlsScrapedSuccessfully;
+    const handoffConfidence = hasUserContent
+      ? Math.max(intentResult.confidence, 0.65)
+      : intentResult.confidence;
     const handoffTrigger = checkHandoffTriggers({
-      confidence: intentResult.confidence,
+      confidence: handoffConfidence,
       biasScore: biasAnalysis.biasScore,
       hallucinationRisk: factCheckResult.hallucinationRisk,
       intent: intent,
       message: message,
-      conversationHistory: convContext.history
+      conversationHistory: convContext.history,
+      documentMatchQuality,
+      isPromptTemplate: isPromptTemplate || false,
+      llmAdequacyScore
     });
 
     let handoffRequired = handoffTrigger.shouldHandoff;
@@ -666,8 +962,9 @@ router.post('/', async (req: Request, res: Response) => {
       );
     }
 
-    // Use enhanced response formatting
-    const replyFormatted = formatResponse(reply, selected.source, bias);
+    // When LLM is used, reply is already formatted; otherwise use legacy formatting
+    // Don't double-format LLM responses
+    const replyFormatted = reply;
 
     // Log bot response event with Sprint 2 metadata (only if authenticated)
     if (userId) {
@@ -697,6 +994,32 @@ router.post('/', async (req: Request, res: Response) => {
       } catch (error) {
         console.warn('Failed to log analytics event:', error);
       }
+    }
+
+    // Log to audit trail for confidence score history tracking
+    try {
+      await logAuditEvent({
+        eventType: AuditEventType.BOT_RESPONSE,
+        severity: AuditSeverity.INFO,
+        userId: userId || undefined,
+        conversationId: conversationId || undefined,
+        message: replyFormatted.substring(0, 500),
+        details: {
+          intent,
+          confidence,
+          sources: factCheckResult.sources?.map((s: any) => s.name) || [],
+          factCheckReliability: factCheckResult.reliability,
+          hallucinationRisk: factCheckResult.hallucinationRisk,
+          userMessage: message.substring(0, 200)
+        },
+        aiDecision: {
+          confidence,
+          reasoning: `Intent: ${intent}, Reliability: ${factCheckResult.reliability}`
+        },
+        userImpact: confidence < 0.4 ? 'medium' : 'low'
+      });
+    } catch (auditErr) {
+      console.warn('Failed to log audit event for bot response:', auditErr);
     }
 
     // Store bot response in conversation history with Sprint 2 metadata
@@ -740,8 +1063,15 @@ router.post('/', async (req: Request, res: Response) => {
       }
     }
 
+    // Site action detection (navigation, uploads, preferences)
+    const siteAction = detectSiteAction(message, entities);
+    let finalResponse = replyFormatted;
+    if (siteAction.detected && siteAction.message) {
+      finalResponse = siteAction.message + '\n\n' + replyFormatted;
+    }
+
     res.json({
-      response: replyFormatted,
+      response: finalResponse,
       confidence,
       bias,
       // Sprint 2: Enhanced bias analysis
@@ -772,7 +1102,8 @@ router.post('/', async (req: Request, res: Response) => {
         text: m.text,
         source: m.source,
         chunk_index: m.chunk_index,
-        score: m.distance
+        score: m.distance,
+        source_type: m.source_type || 'main'
       })),
       // Sprint 2: Enhanced intent classification
       intent,
@@ -795,7 +1126,9 @@ router.post('/', async (req: Request, res: Response) => {
         handoffMessage,
         handoffContact,
         handoffExpert: handoffTrigger.suggestedExpert
-      } : {})
+      } : {}),
+      // Site action for frontend
+      ...(siteAction.detected ? { siteAction } : {})
     });
   } catch (err) {
     console.error('Chat endpoint error:', err);
@@ -849,10 +1182,10 @@ router.post('/search', async (req: Request, res: Response) => {
   }
 });
 
-// User feedback endpoint
+// User feedback endpoint (Feature 5: also records chunk feedback for weights)
 router.post('/feedback', async (req: Request, res: Response) => {
   try {
-    const { messageId, conversationId, helpful, messageText, confidence, timestamp } = req.body;
+    const { messageId, conversationId, helpful, messageText, confidence, timestamp, source, chunk_index } = req.body;
     const userId = (req as any).user?.id;
 
     // Log feedback to audit trail
@@ -871,6 +1204,23 @@ router.post('/feedback', async (req: Request, res: Response) => {
       },
       userImpact: 'low'
     });
+
+    // Feature 5: Record chunk-level feedback for weight adjustment
+    if (source && chunk_index !== undefined) {
+      try {
+        await recordChunkFeedback({
+          chunkId: buildChunkId(source, chunk_index),
+          source,
+          chunkIndex: chunk_index,
+          feedbackType: helpful ? 'helpful' : 'not_helpful',
+          userId: userId ? parseInt(userId) : undefined,
+          conversationId: conversationId || undefined,
+          messageText
+        });
+      } catch (fbErr) {
+        console.warn('Chunk feedback recording failed:', fbErr);
+      }
+    }
 
     // Store in user_feedback table if authenticated
     if (userId) {
@@ -897,10 +1247,10 @@ router.post('/feedback', async (req: Request, res: Response) => {
   }
 });
 
-// Flag response endpoint
+// Flag response endpoint (Feature 5: also records chunk feedback as 'flagged')
 router.post('/flag-response', async (req: Request, res: Response) => {
   try {
-    const { messageId, conversationId, reason, messageText, confidence, timestamp } = req.body;
+    const { messageId, conversationId, reason, messageText, confidence, timestamp, source, chunk_index } = req.body;
     const userId = (req as any).user?.id;
 
     // Log flag to audit trail with high priority
@@ -920,6 +1270,24 @@ router.post('/flag-response', async (req: Request, res: Response) => {
       userImpact: 'high',
       reviewRequired: true
     });
+
+    // Feature 5: Record chunk-level feedback as 'flagged'
+    if (source && chunk_index !== undefined) {
+      try {
+        await recordChunkFeedback({
+          chunkId: buildChunkId(source, chunk_index),
+          source,
+          chunkIndex: chunk_index,
+          feedbackType: 'flagged',
+          userId: userId ? parseInt(userId) : undefined,
+          conversationId: conversationId || undefined,
+          messageText,
+          reason
+        });
+      } catch (fbErr) {
+        console.warn('Chunk flag recording failed:', fbErr);
+      }
+    }
 
     res.json({ success: true, message: 'Response flagged for review' });
   } catch (error) {
@@ -1071,6 +1439,163 @@ router.get('/corrections/:messageId', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Corrections endpoint error:', error);
     res.status(500).json({ error: 'Failed to fetch corrections' });
+  }
+});
+
+// ============================================
+// Feature 2: Document Upload in Chat
+// ============================================
+router.post('/upload-document', upload.single('file'), async (req: Request, res: Response) => {
+  try {
+    const file = req.file;
+    const { conversationId } = req.body;
+    const userId = req.user ? parseInt(req.user.userId) : null;
+
+    if (!file) {
+      return res.status(400).json({ error: 'No file provided' });
+    }
+
+    await ensureInitialized();
+    if (!embedder) {
+      return res.status(503).json({ error: 'Embedding model not ready' });
+    }
+
+    // Parse the document
+    const parsed = await parseDocument(file.buffer, file.originalname, file.mimetype);
+
+    if (!parsed.chunks.length) {
+      return res.status(400).json({ error: 'Could not extract text from document' });
+    }
+
+    // Enforce limits: max 1000 chunks
+    const chunks = parsed.chunks.slice(0, 1000);
+
+    // Embed all chunks
+    const embeddedChunks = [];
+    for (let i = 0; i < chunks.length; i++) {
+      const chunkEmb = await embedder(chunks[i], { pooling: 'mean', normalize: true });
+      embeddedChunks.push({
+        text: chunks[i],
+        embedding: Array.from(chunkEmb.data) as number[],
+        source: file.originalname,
+        sourceType: 'user_upload' as const,
+        chunkIndex: i,
+        metadata: { uploadedAt: new Date().toISOString() }
+      });
+    }
+
+    // Store in session for immediate search
+    const sessionId = conversationId || `anon-${Date.now()}`;
+    const session = getSession(sessionId);
+    const existing = session.uploadedDocChunks || [];
+
+    // Enforce limit: max 5 documents worth of chunks
+    const maxChunks = 1000;
+    const newChunks = [...existing, ...embeddedChunks].slice(0, maxChunks);
+    updateSession(sessionId, { uploadedDocChunks: newChunks });
+
+    // Also try to store in per-user ChromaDB collection if available
+    if (collection && userId) {
+      try {
+        const chromaClient = new ChromaClient();
+        const userCollection = await chromaClient.getOrCreateCollection({
+          name: `user_${userId}_docs`,
+          metadata: { description: `User ${userId} uploaded documents` },
+          embeddingFunction: {
+            generate: async (_docs: string[]) => { throw new Error('embeddingFunction should not be called'); }
+          }
+        });
+
+        const ids = embeddedChunks.map((_, i) => `${file.originalname}_chunk_${i}_${Date.now()}`);
+        const embeddings = embeddedChunks.map(c => c.embedding);
+        const documents = embeddedChunks.map(c => c.text);
+        const metadatas = embeddedChunks.map((c, i) => ({
+          source: file.originalname,
+          chunk_index: i,
+          uploaded_at: new Date().toISOString(),
+          source_type: 'user_upload'
+        }));
+
+        await userCollection.add({ ids, embeddings, documents, metadatas });
+      } catch (chromaErr) {
+        console.warn('Failed to store in user ChromaDB collection:', chromaErr);
+        // Session store still has the chunks, so search will still work
+      }
+    }
+
+    res.json({
+      success: true,
+      filename: file.originalname,
+      chunkCount: chunks.length
+    });
+  } catch (error) {
+    console.error('Document upload error:', error);
+    res.status(500).json({ error: 'Failed to process document' });
+  }
+});
+
+// ============================================
+// Feature 3: URL Scraping in Chat
+// ============================================
+router.post('/add-url', async (req: Request, res: Response) => {
+  try {
+    const { url, conversationId } = req.body;
+
+    if (!url || typeof url !== 'string') {
+      return res.status(400).json({ error: 'URL is required' });
+    }
+
+    await ensureInitialized();
+    if (!embedder) {
+      return res.status(503).json({ error: 'Embedding model not ready' });
+    }
+
+    const sessionId = conversationId || `anon-${Date.now()}`;
+    const session = getSession(sessionId);
+
+    // Enforce limit: max 3 URLs per session
+    const existingUrlCount = (session.scrapedUrlChunks || [])
+      .reduce((sources: Set<string>, c) => { sources.add(c.source); return sources; }, new Set<string>()).size;
+    if (existingUrlCount >= 3) {
+      return res.status(400).json({ error: 'Maximum 3 URLs per session' });
+    }
+
+    // Scrape the URL
+    const scraped = await scrapeUrl(url);
+
+    if (!scraped.chunks.length) {
+      return res.status(400).json({ error: 'Could not extract content from URL' });
+    }
+
+    // Embed all chunks
+    const embeddedChunks = [];
+    for (let i = 0; i < scraped.chunks.length; i++) {
+      const chunkEmb = await embedder(scraped.chunks[i], { pooling: 'mean', normalize: true });
+      embeddedChunks.push({
+        text: scraped.chunks[i],
+        embedding: Array.from(chunkEmb.data) as number[],
+        source: scraped.title || url,
+        sourceType: 'scraped_url' as const,
+        chunkIndex: i,
+        metadata: { url, scrapedAt: scraped.scrapedAt }
+      });
+    }
+
+    // Store in session (NOT in DB per spec)
+    const existingScraped = session.scrapedUrlChunks || [];
+    updateSession(sessionId, {
+      scrapedUrlChunks: [...existingScraped, ...embeddedChunks]
+    });
+
+    res.json({
+      success: true,
+      title: scraped.title,
+      chunkCount: scraped.chunks.length
+    });
+  } catch (error) {
+    console.error('URL scraping error:', error);
+    const message = error instanceof Error ? error.message : 'Failed to scrape URL';
+    res.status(500).json({ error: message });
   }
 });
 

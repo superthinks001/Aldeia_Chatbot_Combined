@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import BiasWarning from './BiasWarning';
 import EthicalAIIndicators from './EthicalAIIndicators';
 import CorrectionBanner from './CorrectionBanner';
 import { api } from '../utils/api';
 
 export interface Message {
-  sender: 'user' | 'bot' | 'docs';
+  sender: 'user' | 'bot' | 'docs' | 'system';
   text?: string;
   timestamp?: Date | string;
   confidence?: number;
@@ -14,11 +15,15 @@ export interface Message {
   hallucination?: boolean;
   grounded?: boolean;
   sources?: string[];
-  matches?: { text: string; source: string; score: number; chunk_index: number }[];
+  matches?: { text: string; source: string; score: number; chunk_index: number; source_type?: string }[];
   isGreeting?: boolean;
   intent?: string;
   context?: any;
   isClarification?: boolean;
+
+  // Feature 5: Source info for feedback
+  source?: string;
+  chunk_index?: number;
 
   // Sprint 2: Enhanced bias analysis
   biasAnalysis?: {
@@ -86,6 +91,10 @@ interface MessageListProps {
 const MessageList: React.FC<MessageListProps> = ({ messages, history, isFullScreen, conversationId }) => {
   const [feedbackSubmitting, setFeedbackSubmitting] = useState<Set<number>>(new Set());
   const [flagSubmitting, setFlagSubmitting] = useState<Set<number>>(new Set());
+  // Track which messages have received feedback: index -> 'positive' | 'negative'
+  const [feedbackGiven, setFeedbackGiven] = useState<Map<number, 'positive' | 'negative'>>(new Map());
+  // Track which messages have been flagged
+  const [flagGiven, setFlagGiven] = useState<Set<number>>(new Set());
 
   const handleFeedback = async (messageIndex: number, helpful: boolean) => {
     const msg = messages[messageIndex];
@@ -102,9 +111,12 @@ const MessageList: React.FC<MessageListProps> = ({ messages, history, isFullScre
           helpful,
           messageText: msg.text,
           confidence: msg.confidence,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          source: msg.source,
+          chunk_index: msg.chunk_index
         }
       });
+      setFeedbackGiven(prev => new Map(prev).set(messageIndex, helpful ? 'positive' : 'negative'));
     } catch (error) {
       console.error('Failed to submit feedback:', error);
     } finally {
@@ -131,10 +143,12 @@ const MessageList: React.FC<MessageListProps> = ({ messages, history, isFullScre
           reason,
           messageText: msg.text,
           confidence: msg.confidence,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          source: msg.source,
+          chunk_index: msg.chunk_index
         }
       });
-      alert('Thank you for flagging this response. Our team will review it.');
+      setFlagGiven(prev => new Set(prev).add(messageIndex));
     } catch (error) {
       console.error('Failed to flag response:', error);
       alert('Failed to flag response. Please try again.');
@@ -168,9 +182,23 @@ const MessageList: React.FC<MessageListProps> = ({ messages, history, isFullScre
     {messages.map((msg, idx) => (
       <div key={idx} style={{
         marginBottom: 12,
-        textAlign: msg.sender === 'user' ? 'right' : 'left',
+        textAlign: msg.sender === 'user' ? 'right' : msg.sender === 'system' ? 'center' : 'left',
       }}>
-        {msg.sender === 'docs' && msg.matches ? (
+        {/* System messages (Feature 2/3) */}
+        {msg.sender === 'system' ? (
+          <div style={{
+            display: 'inline-block',
+            background: '#f0f0f0',
+            borderRadius: 8,
+            padding: '6px 14px',
+            fontSize: 12,
+            color: '#666',
+            fontStyle: 'italic',
+            border: '1px solid #e0e0e0'
+          }}>
+            {msg.text}
+          </div>
+        ) : msg.sender === 'docs' && msg.matches ? (
           <div style={{
             background: '#fffde7',
             border: '1px solid #ffe082',
@@ -207,12 +235,32 @@ const MessageList: React.FC<MessageListProps> = ({ messages, history, isFullScre
                     >
                       {match.text.length > 220 ? match.text.slice(0, 220) + '...' : match.text}
                     </a>
-                    <div style={{ color: '#764ba2', fontSize: 11 }}>
+                    <div style={{ color: '#764ba2', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
                       Source: {match.source}
                       {match.chunk_index !== undefined && (
-                        <span style={{ marginLeft: 8, color: '#1976d2' }}>
+                        <span style={{ color: '#1976d2' }}>
                           ({getPDFLocation(match.chunk_index, match.source)})
                         </span>
+                      )}
+                      {match.source_type === 'user_upload' && (
+                        <span style={{
+                          padding: '1px 6px',
+                          backgroundColor: '#4caf50',
+                          color: 'white',
+                          borderRadius: 8,
+                          fontSize: 10,
+                          fontWeight: 600
+                        }}>Uploaded</span>
+                      )}
+                      {match.source_type === 'scraped_url' && (
+                        <span style={{
+                          padding: '1px 6px',
+                          backgroundColor: '#2196f3',
+                          color: 'white',
+                          borderRadius: 8,
+                          fontSize: 10,
+                          fontWeight: 600
+                        }}>Web</span>
                       )}
                     </div>
                   </div>
@@ -252,12 +300,16 @@ const MessageList: React.FC<MessageListProps> = ({ messages, history, isFullScre
               </div>
             )}
             
-            <div style={{ 
+            <div style={{
               fontSize: msg.isGreeting ? 14 : 13,
               lineHeight: 1.4,
               color: msg.isGreeting ? '#2c3e50' : '#333'
             }}>
-              {msg.text}
+              {msg.sender === 'bot' && !msg.isGreeting ? (
+                <ReactMarkdown>{msg.text || ''}</ReactMarkdown>
+              ) : (
+                msg.text
+              )}
             </div>
             {/* Multi-turn context badge */}
             {msg.sender === 'bot' && msg.context && msg.context.history && msg.context.history.length > 1 && (
@@ -309,71 +361,99 @@ const MessageList: React.FC<MessageListProps> = ({ messages, history, isFullScre
                 gap: 8,
                 flexWrap: 'wrap'
               }}>
-                {/* Explicit Feedback Buttons */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <span style={{ fontSize: 11, color: '#666', marginRight: 4 }}>Was this helpful?</span>
-                  <button
-                    onClick={() => handleFeedback(idx, true)}
-                    disabled={feedbackSubmitting.has(idx)}
-                    style={{
-                      padding: '4px 12px',
-                      fontSize: 11,
-                      backgroundColor: '#4caf50',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: 4,
-                      cursor: feedbackSubmitting.has(idx) ? 'not-allowed' : 'pointer',
-                      opacity: feedbackSubmitting.has(idx) ? 0.6 : 1,
-                      fontWeight: 500
-                    }}
-                    title="Mark as helpful"
-                  >
-                    {feedbackSubmitting.has(idx) ? '...' : '✓ Yes'}
-                  </button>
-                  <button
-                    onClick={() => handleFeedback(idx, false)}
-                    disabled={feedbackSubmitting.has(idx)}
-                    style={{
-                      padding: '4px 12px',
-                      fontSize: 11,
-                      backgroundColor: '#f44336',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: 4,
-                      cursor: feedbackSubmitting.has(idx) ? 'not-allowed' : 'pointer',
-                      opacity: feedbackSubmitting.has(idx) ? 0.6 : 1,
-                      fontWeight: 500
-                    }}
-                    title="Mark as not helpful"
-                  >
-                    {feedbackSubmitting.has(idx) ? '...' : '✗ No'}
-                  </button>
-                </div>
-
-                {/* Flag Response Button */}
-                <button
-                  onClick={() => {
-                    const reason = prompt('Please tell us why you are flagging this response (incorrect, harmful, inappropriate, etc.):');
-                    if (reason) {
-                      handleFlag(idx, reason);
-                    }
-                  }}
-                  disabled={flagSubmitting.has(idx)}
-                  style={{
-                    padding: '4px 12px',
+                {/* Show confirmation or buttons */}
+                {feedbackGiven.has(idx) ? (
+                  <span style={{
                     fontSize: 11,
-                    backgroundColor: 'transparent',
-                    color: '#f44336',
-                    border: '1px solid #f44336',
-                    borderRadius: 4,
-                    cursor: flagSubmitting.has(idx) ? 'not-allowed' : 'pointer',
-                    opacity: flagSubmitting.has(idx) ? 0.6 : 1,
-                    fontWeight: 500
-                  }}
-                  title="Flag this response as incorrect or harmful"
-                >
-                  {flagSubmitting.has(idx) ? '...' : '🚩 Flag'}
-                </button>
+                    color: feedbackGiven.get(idx) === 'positive' ? '#2e7d32' : '#e65100',
+                    fontWeight: 500,
+                    padding: '4px 8px',
+                    backgroundColor: feedbackGiven.get(idx) === 'positive' ? '#e8f5e9' : '#fff3e0',
+                    borderRadius: 4
+                  }}>
+                    {feedbackGiven.get(idx) === 'positive'
+                      ? '✓ Thanks for the positive feedback!'
+                      : '✓ Thanks for your feedback. We\'ll work to improve.'}
+                  </span>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ fontSize: 11, color: '#666', marginRight: 4 }}>Was this helpful?</span>
+                    <button
+                      onClick={() => handleFeedback(idx, true)}
+                      disabled={feedbackSubmitting.has(idx)}
+                      style={{
+                        padding: '4px 12px',
+                        fontSize: 11,
+                        backgroundColor: '#4caf50',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: 4,
+                        cursor: feedbackSubmitting.has(idx) ? 'not-allowed' : 'pointer',
+                        opacity: feedbackSubmitting.has(idx) ? 0.6 : 1,
+                        fontWeight: 500
+                      }}
+                      title="Mark as helpful"
+                    >
+                      {feedbackSubmitting.has(idx) ? '...' : '✓ Yes'}
+                    </button>
+                    <button
+                      onClick={() => handleFeedback(idx, false)}
+                      disabled={feedbackSubmitting.has(idx)}
+                      style={{
+                        padding: '4px 12px',
+                        fontSize: 11,
+                        backgroundColor: '#f44336',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: 4,
+                        cursor: feedbackSubmitting.has(idx) ? 'not-allowed' : 'pointer',
+                        opacity: feedbackSubmitting.has(idx) ? 0.6 : 1,
+                        fontWeight: 500
+                      }}
+                      title="Mark as not helpful"
+                    >
+                      {feedbackSubmitting.has(idx) ? '...' : '✗ No'}
+                    </button>
+                  </div>
+                )}
+
+                {/* Flag Response Button — show confirmation or button */}
+                {flagGiven.has(idx) ? (
+                  <span style={{
+                    fontSize: 11,
+                    color: '#ad1457',
+                    fontWeight: 500,
+                    padding: '4px 8px',
+                    backgroundColor: '#fce4ec',
+                    borderRadius: 4
+                  }}>
+                    🚩 Flagged for review
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => {
+                      const reason = prompt('Please tell us why you are flagging this response (incorrect, harmful, inappropriate, etc.):');
+                      if (reason) {
+                        handleFlag(idx, reason);
+                      }
+                    }}
+                    disabled={flagSubmitting.has(idx) || feedbackGiven.has(idx)}
+                    style={{
+                      padding: '4px 12px',
+                      fontSize: 11,
+                      backgroundColor: 'transparent',
+                      color: '#f44336',
+                      border: '1px solid #f44336',
+                      borderRadius: 4,
+                      cursor: (flagSubmitting.has(idx) || feedbackGiven.has(idx)) ? 'not-allowed' : 'pointer',
+                      opacity: (flagSubmitting.has(idx) || feedbackGiven.has(idx)) ? 0.6 : 1,
+                      fontWeight: 500
+                    }}
+                    title="Flag this response as incorrect or harmful"
+                  >
+                    {flagSubmitting.has(idx) ? '...' : '🚩 Flag'}
+                  </button>
+                )}
               </div>
             )}
           </div>
