@@ -1,9 +1,12 @@
 import { io, Socket } from 'socket.io-client';
 
 // Safe access to environment variables (webpack DefinePlugin or fallback)
-const SOCKET_URL = (typeof process !== 'undefined' && process.env?.REACT_APP_SOCKET_URL) 
-  ? process.env.REACT_APP_SOCKET_URL 
-  : 'http://localhost:3001';
+// Use same origin in production (empty string tells Socket.io to use current origin)
+const SOCKET_URL = (typeof process !== 'undefined' && process.env?.REACT_APP_SOCKET_URL)
+  ? process.env.REACT_APP_SOCKET_URL
+  : (typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+      ? ''
+      : 'http://localhost:3001');
 
 export interface Message {
   id: number;

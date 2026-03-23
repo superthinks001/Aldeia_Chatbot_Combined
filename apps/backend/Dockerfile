@@ -5,7 +5,14 @@
 # ============================================
 
 # Stage 1: Build
-FROM node:18-alpine AS builder
+FROM node:20-slim AS builder
+
+# Install build dependencies for native modules (sharp, etc.)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace
 
@@ -17,7 +24,7 @@ COPY apps/backend/package*.json ./apps/backend/
 COPY apps/chatbot-frontend/package*.json ./apps/chatbot-frontend/
 COPY packages/ ./packages/
 
-# Install all workspace dependencies
+# Install all workspace dependencies and rebuild native modules
 RUN npm ci
 
 # Copy all source code
@@ -28,13 +35,20 @@ RUN npm run build -w apps/backend
 
 # ============================================
 # Stage 2: Production
-FROM node:18-alpine AS production
+FROM node:20-slim AS production
 
-# Install dumb-init for proper signal handling
-RUN apk add --no-cache dumb-init curl
+# Install dumb-init, curl, build tools, and runtime dependencies for sharp/native modules
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    dumb-init \
+    curl \
+    libvips42 \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user for security
-RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
+RUN groupadd -g 1001 nodejs && useradd -u 1001 -g nodejs -s /bin/bash -m nodejs
 
 WORKDIR /workspace
 
@@ -44,14 +58,23 @@ COPY apps/backend/package*.json ./apps/backend/
 COPY apps/chatbot-frontend/package*.json ./apps/chatbot-frontend/
 COPY packages/ ./packages/
 
-# Install production dependencies for the entire workspace
-RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+# Install production dependencies (without --ignore-scripts to build native modules)
+RUN npm ci --omit=dev && npm cache clean --force
 
 # Copy built application from builder stage
 COPY --from=builder --chown=nodejs:nodejs /workspace/apps/backend/dist ./apps/backend/dist
 
-# Create logs directory
+# Create logs directory and make transformers cache writable
 RUN mkdir -p /workspace/apps/backend/logs && chown -R nodejs:nodejs /workspace/apps/backend/logs
+
+# Create cache directory inside node_modules for @xenova/transformers
+RUN mkdir -p /workspace/node_modules/@xenova/transformers/.cache && \
+    chown -R nodejs:nodejs /workspace/node_modules/@xenova/transformers/.cache
+
+# Also set environment variables as fallback
+ENV TRANSFORMERS_CACHE=/workspace/node_modules/@xenova/transformers/.cache
+ENV HF_HOME=/workspace/node_modules/@xenova/transformers/.cache
+ENV XDG_CACHE_HOME=/workspace/node_modules/@xenova/transformers/.cache
 
 # Switch to non-root user
 USER nodejs

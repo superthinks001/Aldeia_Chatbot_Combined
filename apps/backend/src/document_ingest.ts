@@ -36,13 +36,24 @@ function chunkByParagraph(text: string): string[] {
 
 export async function reindexAllDocuments() {
   // Dynamically import @xenova/transformers to handle ES module
-  const { pipeline } = await import('@xenova/transformers');
+  // Use Function constructor to prevent TypeScript from converting to require()
+  const { pipeline } = await (new Function('return import("@xenova/transformers")'))();
 
   // Initialize MiniLM embedding pipeline
   const embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
 
-  // Initialize ChromaDB client and collection
-  const chromaClient = new ChromaClient();
+  // Initialize ChromaDB client with host and auth from environment
+  const chromaHost = process.env.CHROMA_HOST || 'localhost';
+  const chromaPort = process.env.CHROMA_PORT || '8000';
+  const chromaAuthToken = process.env.CHROMA_AUTH_TOKEN;
+
+  const chromaClient = new ChromaClient({
+    path: `http://${chromaHost}:${chromaPort}`,
+    auth: chromaAuthToken ? {
+      provider: 'token',
+      credentials: chromaAuthToken
+    } : undefined
+  });
   const collection = await chromaClient.getOrCreateCollection({
     name: 'fire_recovery_chunks',
     metadata: { description: 'Paragraph chunks from LA/Pasadena County fire recovery PDFs' },
@@ -67,7 +78,7 @@ export async function reindexAllDocuments() {
         const chunk = chunks[i];
         // Generate embedding
         const embeddingTensor = await embedder(chunk, { pooling: 'mean', normalize: true });
-        const embedding = Array.from(embeddingTensor.data); // Convert Float32Array to number[]
+        const embedding = Array.from(embeddingTensor.data) as number[]; // Convert Float32Array to number[]
         // Store in ChromaDB
         await collection.add({
           ids: [`${path.basename(file)}_${i}`],

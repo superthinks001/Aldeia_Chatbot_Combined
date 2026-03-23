@@ -12,9 +12,10 @@ let embedder: any = null;
 let pipelineFn: any = null;
 
 // Dynamically import @xenova/transformers (ESM module)
+// Use Function constructor to prevent TypeScript from converting to require()
 async function getTransformers() {
   if (!pipelineFn) {
-    const transformers = await import('@xenova/transformers');
+    const transformers = await (new Function('return import("@xenova/transformers")'))();
     pipelineFn = transformers.pipeline;
   }
   return pipelineFn;
@@ -26,7 +27,18 @@ async function initializeChromaDB() {
     return { chromaClient, factCollection, embedder };
   }
 
-  chromaClient = new ChromaClient();
+  // Configure ChromaDB client with host and auth from environment
+  const chromaHost = process.env.CHROMA_HOST || 'localhost';
+  const chromaPort = process.env.CHROMA_PORT || '8000';
+  const chromaAuthToken = process.env.CHROMA_AUTH_TOKEN;
+
+  chromaClient = new ChromaClient({
+    path: `http://${chromaHost}:${chromaPort}`,
+    auth: chromaAuthToken ? {
+      provider: 'token',
+      credentials: chromaAuthToken
+    } : undefined
+  });
 
   // Initialize embedding model using dynamic import
   const pipeline = await getTransformers();
@@ -98,7 +110,7 @@ export async function initializeVerifiedFacts(): Promise<void> {
     try {
       // Generate embedding for the fact
       const embeddingTensor = await embedder(factData.fact, { pooling: 'mean', normalize: true });
-      const embedding = Array.from(embeddingTensor.data);
+      const embedding = Array.from(embeddingTensor.data) as number[];
 
       // Store in ChromaDB
       await factCollection.add({
@@ -128,7 +140,7 @@ export async function addVerifiedFact(fact: string, sources: string[], factId?: 
   
   // Generate embedding
   const embeddingTensor = await embedder(fact, { pooling: 'mean', normalize: true });
-  const embedding = Array.from(embeddingTensor.data);
+  const embedding = Array.from(embeddingTensor.data) as number[];
 
   // Store in ChromaDB
   await factCollection.add({
@@ -156,7 +168,7 @@ export async function searchSimilarFacts(claim: string, topK: number = 5, thresh
 
   // Generate embedding for the claim
   const embeddingTensor = await embedder(claim, { pooling: 'mean', normalize: true });
-  const embedding = Array.from(embeddingTensor.data);
+  const embedding = Array.from(embeddingTensor.data) as number[];
 
   // Query ChromaDB for similar facts
   const results = await factCollection.query({

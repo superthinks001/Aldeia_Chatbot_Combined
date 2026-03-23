@@ -50,9 +50,21 @@ const biasLogPath = path.join(__dirname, '../../bias_fairness.log');
 (async () => {
   try {
     // Dynamically import @xenova/transformers to handle ES module
-    const { pipeline } = await import('@xenova/transformers');
+    const { pipeline } = await (new Function('return import("@xenova/transformers")'))();
     embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
-    const chromaClient = new ChromaClient();
+
+    // Configure ChromaDB client with host and auth from environment
+    const chromaHost = process.env.CHROMA_HOST || 'localhost';
+    const chromaPort = process.env.CHROMA_PORT || '8000';
+    const chromaAuthToken = process.env.CHROMA_AUTH_TOKEN;
+
+    const chromaClient = new ChromaClient({
+      path: `http://${chromaHost}:${chromaPort}`,
+      auth: chromaAuthToken ? {
+        provider: 'token',
+        credentials: chromaAuthToken
+      } : undefined
+    });
     collection = await chromaClient.getOrCreateCollection({
       name: 'fire_recovery_chunks',
       metadata: { description: 'Paragraph chunks from LA/Pasadena County fire recovery PDFs' },
@@ -65,7 +77,7 @@ const biasLogPath = path.join(__dirname, '../../bias_fairness.log');
     console.warn('ChromaDB initialization failed, continuing without vector search:', error instanceof Error ? error.message : String(error));
     try {
       // Set embedder without ChromaDB for basic functionality
-      const { pipeline } = await import('@xenova/transformers');
+      const { pipeline } = await (new Function('return import("@xenova/transformers")'))();
       embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
     } catch (embedError) {
       console.error('Failed to initialize embedder:', embedError);
@@ -579,6 +591,8 @@ router.post('/', async (req: Request, res: Response) => {
     const nResults = isPromptTemplate ? 7 : 3;
 
     let matches: any[] = [];
+    
+    let matches = [];
     if (collection) {
       // Query ChromaDB for top N most similar chunks
       const results = await collection.query({
@@ -1154,7 +1168,7 @@ router.post('/search', async (req: Request, res: Response) => {
     }
     // Generate embedding for the query
     const embeddingTensor = await embedder(query, { pooling: 'mean', normalize: true });
-    const embedding = Array.from(embeddingTensor.data);
+    const embedding = Array.from(embeddingTensor.data) as number[];
     // Query ChromaDB for top 5 most similar chunks
     const results = await collection.query({
       queryEmbeddings: [embedding],
