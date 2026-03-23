@@ -69,7 +69,7 @@ const PROMPT_TEMPLATES: PromptTemplate[] = [
 ];
 
 interface PromptTemplatesProps {
-  onSelectTemplate: (prompt: string) => void;
+  onSelectTemplate: (prompt: string, isTemplate?: boolean) => void;
   currentStep?: string;
   onHide?: () => void;
 }
@@ -83,16 +83,17 @@ const PromptTemplates: React.FC<PromptTemplatesProps> = ({ onSelectTemplate, cur
     if (!currentStep) return PROMPT_TEMPLATES;
     
     const stepCategoryMap: { [key: string]: string[] } = {
-      'location': ['rebuild', 'general'],
+      'landing': ['rebuild', 'debris', 'financial', 'permit'],
+      'location': ['rebuild', 'debris', 'financial'],
       'preferences-style': ['rebuild', 'permit'],
       'preferences-needs': ['rebuild', 'permit'],
       'inspiration': ['rebuild', 'permit'],
       'budget': ['financial', 'rebuild'],
-      'matches': ['rebuild', 'general'],
+      'matches': ['rebuild', 'financial'],
       'details': ['rebuild', 'permit']
     };
 
-    const relevantCategories = stepCategoryMap[currentStep] || ['general'];
+    const relevantCategories = stepCategoryMap[currentStep] || ['rebuild', 'debris', 'financial', 'permit'];
     return PROMPT_TEMPLATES.filter(t => relevantCategories.includes(t.category));
   };
 
@@ -167,19 +168,19 @@ const PromptTemplates: React.FC<PromptTemplatesProps> = ({ onSelectTemplate, cur
           </button>
       </div>
 
-      <div style={{ padding: '12px' }}>
+      <div style={{ padding: '8px 12px' }}>
         {/* Category Filter */}
         {categories.length > 1 && (
           <div style={{
             display: 'flex',
             gap: 6,
-            marginBottom: 12,
+            marginBottom: 8,
             flexWrap: 'wrap'
           }}>
             <button
               onClick={() => setSelectedCategory(null)}
               style={{
-                padding: '4px 10px',
+                padding: '3px 10px',
                 fontSize: 11,
                 backgroundColor: selectedCategory === null ? '#667eea' : '#f5f5f5',
                 color: selectedCategory === null ? 'white' : '#333',
@@ -196,7 +197,7 @@ const PromptTemplates: React.FC<PromptTemplatesProps> = ({ onSelectTemplate, cur
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
                 style={{
-                  padding: '4px 10px',
+                  padding: '3px 10px',
                   fontSize: 11,
                   backgroundColor: selectedCategory === cat ? '#667eea' : '#f5f5f5',
                   color: selectedCategory === cat ? 'white' : '#333',
@@ -212,20 +213,21 @@ const PromptTemplates: React.FC<PromptTemplatesProps> = ({ onSelectTemplate, cur
           </div>
         )}
 
-        {/* Templates */}
+        {/* Templates — horizontal scroll for all items in one row */}
         <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-          gap: 8
+          display: 'flex',
+          gap: 8,
+          overflowX: 'auto',
+          paddingBottom: 4
         }}>
           {filteredTemplates
             .filter(t => !selectedCategory || t.category === selectedCategory)
             .map(template => (
               <button
                 key={template.id}
-                onClick={() => onSelectTemplate(template.prompt)}
+                onClick={() => onSelectTemplate(template.prompt, true)}
                 style={{
-                  padding: '10px 12px',
+                  padding: '8px 12px',
                   backgroundColor: 'white',
                   border: '1px solid #e0e0e0',
                   borderRadius: 8,
@@ -233,8 +235,11 @@ const PromptTemplates: React.FC<PromptTemplatesProps> = ({ onSelectTemplate, cur
                   textAlign: 'left',
                   transition: 'all 0.2s',
                   display: 'flex',
-                  flexDirection: 'column',
-                  gap: 4
+                  alignItems: 'center',
+                  gap: 8,
+                  flexShrink: 0,
+                  minWidth: 160,
+                  maxWidth: 220
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.backgroundColor = '#f0f4ff';
@@ -247,11 +252,11 @@ const PromptTemplates: React.FC<PromptTemplatesProps> = ({ onSelectTemplate, cur
                   e.currentTarget.style.boxShadow = 'none';
                 }}
               >
-                <div style={{ fontSize: 18, marginBottom: 4 }}>
+                <div style={{ fontSize: 16, flexShrink: 0 }}>
                   {template.icon}
                 </div>
                 <div style={{
-                  fontSize: 12,
+                  fontSize: 11,
                   fontWeight: 600,
                   color: '#2c3e50',
                   lineHeight: 1.3

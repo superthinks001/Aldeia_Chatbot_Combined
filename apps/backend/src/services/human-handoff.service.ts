@@ -26,6 +26,7 @@ export enum HandoffReason {
 
 /**
  * Check if conversation should be handed off to human
+ * Feature 4: Extended with document match quality and LLM adequacy scoring
  */
 export function checkHandoffTriggers(data: {
   confidence?: number;
@@ -34,6 +35,9 @@ export function checkHandoffTriggers(data: {
   intent?: string;
   message?: string;
   conversationHistory?: any[];
+  documentMatchQuality?: number;
+  isPromptTemplate?: boolean;
+  llmAdequacyScore?: number;
 }): HandoffTrigger {
   // Emergency intent - highest priority
   if (data.intent === 'emergency') {
@@ -46,15 +50,34 @@ export function checkHandoffTriggers(data: {
     };
   }
 
-  // Low confidence threshold (<60%)
+  // Feature 4: Smart confidence threshold for prompt templates
+  // If LLM says docs adequately answer (score >= 3), suppress LOW_CONFIDENCE handoff
   if (data.confidence !== undefined && data.confidence < 0.60) {
-    return {
-      shouldHandoff: true,
-      reason: HandoffReason.LOW_CONFIDENCE,
-      priority: 'high',
-      suggestedExpert: 'Fire Recovery Specialist',
-      contextSummary: `AI confidence ${(data.confidence * 100).toFixed(0)}% - below threshold`
-    };
+    // Feature 4: Adjusted thresholds for prompt templates
+    if (data.isPromptTemplate && data.llmAdequacyScore !== undefined && data.llmAdequacyScore >= 3) {
+      // LLM assessed documents as adequate — don't hand off for low confidence
+      console.log('Feature 4: Suppressed LOW_CONFIDENCE handoff - LLM adequacy score:', data.llmAdequacyScore);
+    } else if (data.isPromptTemplate && data.documentMatchQuality !== undefined && data.documentMatchQuality > 0.6) {
+      // Good document match quality for prompt template — lower threshold to 0.40
+      if (data.confidence < 0.40) {
+        return {
+          shouldHandoff: true,
+          reason: HandoffReason.LOW_CONFIDENCE,
+          priority: 'high',
+          suggestedExpert: 'Fire Recovery Specialist',
+          contextSummary: `AI confidence ${(data.confidence * 100).toFixed(0)}% - below adjusted template threshold`
+        };
+      }
+      // Between 0.40 and 0.60 with good doc match — don't hand off
+    } else {
+      return {
+        shouldHandoff: true,
+        reason: HandoffReason.LOW_CONFIDENCE,
+        priority: 'high',
+        suggestedExpert: 'Fire Recovery Specialist',
+        contextSummary: `AI confidence ${(data.confidence * 100).toFixed(0)}% - below threshold`
+      };
+    }
   }
 
   // High bias detection

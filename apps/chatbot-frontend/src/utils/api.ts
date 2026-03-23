@@ -148,6 +148,20 @@ export const api = {
   searchDocuments: (query: string) =>
     apiClient.post('/chat/search', { query }),
 
+  // Feature 2: Upload document in chat
+  uploadChatDocument: (conversationId: string, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('conversationId', conversationId);
+    return apiClient.post('/chat/upload-document', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  },
+
+  // Feature 3: Add URL for scraping in chat
+  addChatUrl: (conversationId: string, url: string) =>
+    apiClient.post('/chat/add-url', { url, conversationId }),
+
   // Generic request method
   request: (config: AxiosRequestConfig) =>
     apiClient.request(config)
