@@ -16,12 +16,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /workspace
 
-# Copy workspace package files first (for better layer caching)
-COPY package*.json ./
+# Copy workspace package files explicitly (glob can cause cache invalidation issues)
+COPY package.json package-lock.json ./
 
 # Copy all workspace package.json files to satisfy npm workspaces
-COPY apps/backend/package*.json ./apps/backend/
-COPY apps/chatbot-frontend/package*.json ./apps/chatbot-frontend/
+COPY apps/backend/package.json ./apps/backend/
+COPY apps/chatbot-frontend/package.json ./apps/chatbot-frontend/
 COPY packages/ ./packages/
 
 # Install all workspace dependencies and rebuild native modules
@@ -52,10 +52,10 @@ RUN groupadd -g 1001 nodejs && useradd -u 1001 -g nodejs -s /bin/bash -m nodejs
 
 WORKDIR /workspace
 
-# Copy workspace package files
-COPY package*.json ./
-COPY apps/backend/package*.json ./apps/backend/
-COPY apps/chatbot-frontend/package*.json ./apps/chatbot-frontend/
+# Copy workspace package files explicitly
+COPY package.json package-lock.json ./
+COPY apps/backend/package.json ./apps/backend/
+COPY apps/chatbot-frontend/package.json ./apps/chatbot-frontend/
 COPY packages/ ./packages/
 
 # Install production dependencies (without --ignore-scripts to build native modules)

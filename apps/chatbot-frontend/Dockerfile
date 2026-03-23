@@ -13,12 +13,12 @@ ENV REACT_APP_API_URL=$REACT_APP_API_URL
 
 WORKDIR /workspace
 
-# Copy workspace package files first (for better layer caching)
-COPY package*.json ./
+# Copy workspace package files explicitly (glob can cause cache invalidation issues)
+COPY package.json package-lock.json ./
 
 # Copy all workspace package.json files to satisfy npm workspaces
-COPY apps/backend/package*.json ./apps/backend/
-COPY apps/chatbot-frontend/package*.json ./apps/chatbot-frontend/
+COPY apps/backend/package.json ./apps/backend/
+COPY apps/chatbot-frontend/package.json ./apps/chatbot-frontend/
 COPY packages/ ./packages/
 
 # Install all workspace dependencies
