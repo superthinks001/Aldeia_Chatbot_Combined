@@ -63,6 +63,10 @@ Full-stack fire recovery assistance chatbot with RAG capabilities, deployed to A
 - Run containers as non-root user
 - Include health checks in all services
 - Tag images appropriately (`:latest` for prod, `:staging` for staging)
+- **CRITICAL**: Always use explicit file names in `COPY` instructions (e.g., `COPY package.json package-lock.json ./`), never globs like `package*.json`. BuildKit GHA cache does not reliably invalidate glob-based layers when new files are added to the match set.
+- Backend uses `node:20-slim` (Debian-based, needed for native modules like `sharp`)
+- Frontend uses `node:20-alpine` (lightweight, no native module builds needed)
+- A `.dockerignore` file must exist at the repo root to exclude `node_modules`, `.git`, docs, infra, etc.
 
 ### Environment Management
 - Never commit secrets to git
@@ -166,6 +170,72 @@ npm run ingest:docs
 - Filter results by distance threshold (> 2.0 is too dissimilar)
 - Always cite sources in responses
 
+## Pre-Merge Build Verification Checklist
+
+**IMPORTANT**: Before merging any branch into `development` or `main`, run through this checklist to prevent deployment failures.
+
+### 1. Docker Build Checks
+- [ ] `package-lock.json` exists at root and is committed (required by `npm ci`)
+- [ ] Both Dockerfiles use explicit `COPY package.json package-lock.json ./` (never `package*.json`)
+- [ ] `.dockerignore` exists at repo root and excludes `node_modules`, `.git`, etc.
+- [ ] Backend Dockerfile base image is `node:20-slim` (needed for native modules)
+- [ ] Frontend Dockerfile base image is `node:20-alpine`
+- [ ] Both Dockerfiles have a `production` target stage (CI/CD references `target: production`)
+- [ ] Run `docker build --target production -f apps/backend/Dockerfile .` locally to verify
+- [ ] Run `docker build --target production -f apps/chatbot-frontend/Dockerfile .` locally to verify
+
+### 2. Workspace Integrity
+- [ ] Root `package.json` workspaces field includes `apps/*` and `packages/*`
+- [ ] `package-lock.json` is in sync with `package.json` (run `npm install` if needed)
+- [ ] All workspace packages (`packages/shared-types`, `packages/ui-components`, `packages/utils`) exist
+- [ ] `npm ci` succeeds from the repo root
+
+### 3. Build Verification
+- [ ] `npm run build` succeeds in `apps/backend`
+- [ ] `npm run build` succeeds in `apps/chatbot-frontend`
+
+### 4. CI/CD Workflow Checks
+- [ ] `.github/workflows/ci.yml` and `.github/workflows/deploy.yml` reference correct paths
+- [ ] `scripts/testing/test-phase6-simple.sh` exists if referenced by CI
+- [ ] Node version in CI (`NODE_VERSION` env) matches Dockerfile base images (currently Node 20)
+
+### 5. Files That Must Be Committed
+- `package.json` (root)
+- `package-lock.json` (root)
+- `.dockerignore` (root)
+- `apps/backend/Dockerfile`
+- `apps/chatbot-frontend/Dockerfile`
+- `apps/chatbot-frontend/nginx.conf`
+
+## Known Issues & Lessons Learned
+
+### Docker Build Cache (GHA) - March 2026
+**Problem**: `COPY package*.json ./` with Docker BuildKit GHA cache (`cache-from: type=gha`) fails to invalidate stale layers when new files are added that match the glob. This caused `npm ci` to fail because `package-lock.json` was not being copied into the container despite existing in the repo.
+
+**Root Cause**: BuildKit GHA cache keys for COPY glob layers are computed from the hash of previously matched files. When `package-lock.json` was added/changed, the cache key still matched the old layer (which only contained `package.json`), so the stale layer was reused.
+
+**Fix**: Always use explicit file names: `COPY package.json package-lock.json ./`
+
+**Prevention**: Never use glob patterns (`*`) in Dockerfile COPY instructions for critical files.
+
+### Node Version Alignment
+**Problem**: CI workflow, local Dockerfiles, and deployed Dockerfiles had different Node versions (18 vs 20), causing inconsistent behavior.
+
+**Fix**: Standardized on Node 20 across all Dockerfiles and CI.
+
+**Prevention**: When changing Node version, update ALL of: Dockerfiles, CI workflow `NODE_VERSION`, and local dev setup.
+
+### Missing .dockerignore
+**Problem**: Without a `.dockerignore`, Docker build context was 107MB (included `.git`, `node_modules` from local dev, docs, infra files), slowing down builds.
+
+**Fix**: Added `.dockerignore` excluding non-essential files.
+
+### Build Context Size
+The Docker build context should be under 20MB with a proper `.dockerignore`. If it grows significantly, check for:
+- Accidentally committed `node_modules`
+- Large binary files
+- Build artifacts (`dist/`) committed to git
+
 ## Behavior Preferences for Claude
 
 ### Communication Style
@@ -186,6 +256,12 @@ npm run ingest:docs
 - Think about scalability and maintainability
 - Suggest alternatives when appropriate
 
+### Before Merging to Development
+- Always check the Pre-Merge Build Verification Checklist above
+- Review recent CI/CD runs on GitHub Actions for failures
+- Verify Docker builds pass locally before pushing
+- Ensure `package-lock.json` is up to date and committed
+
 ---
 
-*Last Updated: 2025-11-24*
+*Last Updated: 2026-03-23*
