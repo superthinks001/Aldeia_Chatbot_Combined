@@ -591,8 +591,6 @@ router.post('/', async (req: Request, res: Response) => {
     const nResults = isPromptTemplate ? 7 : 3;
 
     let matches: any[] = [];
-    
-    let matches = [];
     if (collection) {
       // Query ChromaDB for top N most similar chunks
       const results = await collection.query({

@@ -24,8 +24,8 @@ COPY apps/backend/package.json ./apps/backend/
 COPY apps/chatbot-frontend/package.json ./apps/chatbot-frontend/
 COPY packages/ ./packages/
 
-# Verify lockfile exists and install all workspace dependencies
-RUN ls -la package*.json && cat package-lock.json | head -5 && npm ci
+# Install all workspace dependencies and rebuild native modules
+RUN npm ci
 
 # Copy all source code
 COPY . .
@@ -58,8 +58,8 @@ COPY apps/backend/package.json ./apps/backend/
 COPY apps/chatbot-frontend/package.json ./apps/chatbot-frontend/
 COPY packages/ ./packages/
 
-# Verify lockfile exists and install production dependencies
-RUN ls -la package*.json && npm ci --omit=dev && npm cache clean --force
+# Install production dependencies (without --ignore-scripts to build native modules)
+RUN npm ci --omit=dev && npm cache clean --force
 
 # Copy built application from builder stage
 COPY --from=builder --chown=nodejs:nodejs /workspace/apps/backend/dist ./apps/backend/dist

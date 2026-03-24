@@ -21,8 +21,8 @@ COPY apps/backend/package.json ./apps/backend/
 COPY apps/chatbot-frontend/package.json ./apps/chatbot-frontend/
 COPY packages/ ./packages/
 
-# Verify lockfile exists and install all workspace dependencies
-RUN ls -la package*.json && cat package-lock.json | head -5 && npm ci
+# Install all workspace dependencies
+RUN npm ci
 
 # Copy all source code
 COPY . .
