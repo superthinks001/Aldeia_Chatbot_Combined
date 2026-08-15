@@ -86,3 +86,22 @@ variable "acm_certificate_arn" {
   type        = string
   default     = ""
 }
+
+# EC2 Configuration
+variable "instance_type" {
+  description = "EC2 instance type for the application host"
+  type        = string
+  default     = "t3.medium"
+}
+
+variable "root_volume_size" {
+  description = "Root EBS volume size (GB) for the application host"
+  type        = number
+  default     = 50
+}
+
+variable "key_name" {
+  description = "EC2 key pair name for SSH access (optional - SSM Session Manager works without one)"
+  type        = string
+  default     = null
+}

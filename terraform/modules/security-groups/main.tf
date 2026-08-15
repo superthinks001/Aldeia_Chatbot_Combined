@@ -68,8 +68,8 @@ resource "aws_vpc_security_group_ingress_rule" "app_backend_from_alb" {
 resource "aws_vpc_security_group_ingress_rule" "app_frontend_from_alb" {
   security_group_id            = aws_security_group.app.id
   description                  = "Allow frontend port from ALB"
-  from_port                    = 3002
-  to_port                      = 3002
+  from_port                    = var.frontend_port
+  to_port                      = var.frontend_port
   ip_protocol                  = "tcp"
   referenced_security_group_id = aws_security_group.alb.id
 }

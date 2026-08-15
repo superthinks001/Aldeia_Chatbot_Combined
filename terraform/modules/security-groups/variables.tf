@@ -22,6 +22,12 @@ variable "bastion_security_group_id" {
   default     = ""
 }
 
+variable "frontend_port" {
+  description = "Host port the ALB forwards frontend traffic to (3002 for ECS/Fargate container port, 3000 for the EC2 host-published port per docker-compose.staging.yml)"
+  type        = number
+  default     = 3002
+}
+
 variable "tags" {
   description = "Tags to apply to all resources"
   type        = map(string)

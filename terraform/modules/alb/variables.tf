@@ -32,6 +32,12 @@ variable "target_type" {
   default     = "ip"
 }
 
+variable "frontend_port" {
+  description = "Port the frontend target group forwards to. For target_type=ip (ECS/Fargate) this is the container port (3002); for target_type=instance (EC2) this should be the host port Docker publishes (3000, per docker-compose.staging.yml)."
+  type        = number
+  default     = 3002
+}
+
 variable "enable_deletion_protection" {
   description = "Enable deletion protection on ALB"
   type        = bool

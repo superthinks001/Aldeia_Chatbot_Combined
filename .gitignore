@@ -64,7 +64,6 @@ logs/
 # Terraform provider binaries (CRITICAL - prevents 785MB files!)
 **/.terraform/providers/**/*.exe
 **/.terraform/providers/**/*
-infra/.terraform/
 
 # Environment variables
 .env

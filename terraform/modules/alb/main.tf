@@ -8,8 +8,8 @@ resource "aws_lb" "main" {
   security_groups    = [var.alb_security_group_id]
   subnets            = var.public_subnet_ids
 
-  enable_deletion_protection = var.enable_deletion_protection
-  enable_http2              = true
+  enable_deletion_protection       = var.enable_deletion_protection
+  enable_http2                     = true
   enable_cross_zone_load_balancing = true
 
   access_logs {
@@ -63,7 +63,7 @@ resource "aws_lb_target_group" "backend" {
 # Target Group - Frontend
 resource "aws_lb_target_group" "frontend" {
   name        = "${var.name_prefix}-frontend-tg"
-  port        = 3002
+  port        = var.frontend_port
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
   target_type = var.target_type

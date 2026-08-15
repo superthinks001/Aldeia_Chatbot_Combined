@@ -83,6 +83,17 @@ output "frontend_target_group_arn" {
   value       = module.alb.frontend_target_group_arn
 }
 
+# EC2 Outputs
+output "app_instance_id" {
+  description = "ID of the application EC2 instance"
+  value       = module.ec2.instance_id
+}
+
+output "app_public_ip" {
+  description = "Public IP of the application EC2 instance - use this as the SERVER_HOST GitHub Environment secret for deploy.yml"
+  value       = module.ec2.public_ip
+}
+
 # Summary Output
 output "deployment_summary" {
   description = "Summary of deployed resources"
@@ -92,6 +103,8 @@ output "deployment_summary" {
     vpc_id          = module.vpc.vpc_id
     vpc_cidr        = module.vpc.vpc_cidr
     alb_dns_name    = module.alb.alb_dns_name
+    app_instance_id = module.ec2.instance_id
+    app_public_ip   = module.ec2.public_ip
     nat_gateways    = length(module.vpc.nat_gateway_ids)
     public_subnets  = length(module.vpc.public_subnet_ids)
     private_subnets = length(module.vpc.private_app_subnet_ids) + length(module.vpc.private_db_subnet_ids)

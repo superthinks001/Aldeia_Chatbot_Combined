@@ -79,12 +79,12 @@ module "security_groups" {
 module "alb" {
   source = "../../modules/alb"
 
-  name_prefix            = "${var.project_name}-${var.environment}"
-  vpc_id                 = module.vpc.vpc_id
-  public_subnet_ids      = module.vpc.public_subnet_ids
-  alb_security_group_id  = module.security_groups.alb_security_group_id
-  certificate_arn        = var.acm_certificate_arn
-  target_type            = "ip" # Use "instance" if deploying to EC2
+  name_prefix           = "${var.project_name}-${var.environment}"
+  vpc_id                = module.vpc.vpc_id
+  public_subnet_ids     = module.vpc.public_subnet_ids
+  alb_security_group_id = module.security_groups.alb_security_group_id
+  certificate_arn       = var.acm_certificate_arn
+  target_type           = "ip" # Use "instance" if deploying to EC2
 
   enable_deletion_protection = var.enable_alb_deletion_protection
   enable_access_logs         = var.enable_alb_access_logs

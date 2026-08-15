@@ -13,8 +13,8 @@ availability_zones = ["us-east-2a", "us-east-2b"]
 
 # Public Subnets (for ALB and NAT Gateway)
 public_subnet_cidrs = [
-  "10.1.1.0/24",  # us-east-2a
-  "10.1.2.0/24"   # us-east-2b
+  "10.1.1.0/24", # us-east-2a
+  "10.1.2.0/24"  # us-east-2b
 ]
 
 # Private Application Subnets (for ECS/EC2)

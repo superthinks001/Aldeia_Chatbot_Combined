@@ -87,14 +87,14 @@ output "frontend_target_group_arn" {
 output "deployment_summary" {
   description = "Summary of deployed resources"
   value = {
-    environment     = var.environment
-    region          = var.aws_region
-    vpc_id          = module.vpc.vpc_id
-    vpc_cidr        = module.vpc.vpc_cidr
-    alb_dns_name    = module.alb.alb_dns_name
-    nat_gateways    = length(module.vpc.nat_gateway_ids)
-    public_subnets  = length(module.vpc.public_subnet_ids)
-    private_subnets = length(module.vpc.private_app_subnet_ids) + length(module.vpc.private_db_subnet_ids)
+    environment       = var.environment
+    region            = var.aws_region
+    vpc_id            = module.vpc.vpc_id
+    vpc_cidr          = module.vpc.vpc_cidr
+    alb_dns_name      = module.alb.alb_dns_name
+    nat_gateways      = length(module.vpc.nat_gateway_ids)
+    public_subnets    = length(module.vpc.public_subnet_ids)
+    private_subnets   = length(module.vpc.private_app_subnet_ids) + length(module.vpc.private_db_subnet_ids)
     high_availability = !var.single_nat_gateway
   }
 }

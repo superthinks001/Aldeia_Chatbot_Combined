@@ -61,10 +61,11 @@ module "vpc" {
 module "security_groups" {
   source = "../../modules/security-groups"
 
-  name_prefix        = "${var.project_name}-${var.environment}"
-  vpc_id             = module.vpc.vpc_id
-  enable_ssh_access  = false
+  name_prefix               = "${var.project_name}-${var.environment}"
+  vpc_id                    = module.vpc.vpc_id
+  enable_ssh_access         = false
   bastion_security_group_id = ""
+  frontend_port             = 3000 # EC2 host-published port, see module.alb frontend_port note above
 
   tags = {
     Environment = var.environment
@@ -76,12 +77,13 @@ module "security_groups" {
 module "alb" {
   source = "../../modules/alb"
 
-  name_prefix            = "${var.project_name}-${var.environment}"
-  vpc_id                 = module.vpc.vpc_id
-  public_subnet_ids      = module.vpc.public_subnet_ids
-  alb_security_group_id  = module.security_groups.alb_security_group_id
-  certificate_arn        = var.acm_certificate_arn
-  target_type            = "ip" # Use "instance" if deploying to EC2
+  name_prefix           = "${var.project_name}-${var.environment}"
+  vpc_id                = module.vpc.vpc_id
+  public_subnet_ids     = module.vpc.public_subnet_ids
+  alb_security_group_id = module.security_groups.alb_security_group_id
+  certificate_arn       = var.acm_certificate_arn
+  target_type           = "instance" # single EC2 host, not ECS/Fargate
+  frontend_port         = 3000       # host port docker-compose.staging.yml publishes (maps to container 3002)
 
   enable_deletion_protection = false # Disabled for staging
   enable_access_logs         = false # Disabled for staging to save costs
@@ -89,5 +91,25 @@ module "alb" {
   tags = {
     Environment = var.environment
     Tier        = "LoadBalancer"
+  }
+}
+
+# EC2 Module - single Docker host running backend, frontend, Redis, ChromaDB
+module "ec2" {
+  source = "../../modules/ec2"
+
+  name_prefix       = "${var.project_name}-${var.environment}"
+  subnet_id         = module.vpc.public_subnet_ids[0]
+  security_group_id = module.security_groups.app_security_group_id
+  instance_type     = var.instance_type
+  root_volume_size  = var.root_volume_size
+  key_name          = var.key_name
+
+  backend_target_group_arn  = module.alb.backend_target_group_arn
+  frontend_target_group_arn = module.alb.frontend_target_group_arn
+
+  tags = {
+    Environment = var.environment
+    Tier        = "Application"
   }
 }
