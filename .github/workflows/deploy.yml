@@ -3,8 +3,15 @@ name: CD - Deploy
 # ============================================
 # CONTINUOUS DEPLOYMENT WORKFLOW
 # ============================================
-# Deploys to staging on development branch
 # Deploys to production on main branch
+#
+# STAGING AUTO-DEPLOY DISABLED 2026-08-14: the staging AWS environment
+# (EC2 host + NAT gateway) was torn down to cut idle cost. Re-add
+# "development" to push.branches below once staging is rebuilt
+# (see infra/ Terraform + scripts/setup/setup-ec2-server.sh), and make
+# sure the staging GitHub Environment secrets (SERVER_HOST, etc.) point
+# at the new host first. Until then, staging can still be run manually
+# via workflow_dispatch once those secrets exist.
 #
 # PREREQUISITES (must be running on server):
 # - Redis (deployed via scripts/deployment/deploy-redis.sh)
@@ -16,7 +23,7 @@ name: CD - Deploy
 
 on:
   push:
-    branches: [main, development]
+    branches: [main]
     paths-ignore:
       - '**.md'
       - 'docs/**'
