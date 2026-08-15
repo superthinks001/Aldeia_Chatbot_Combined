@@ -209,6 +209,13 @@ npm run ingest:docs
 
 ## Known Issues & Lessons Learned
 
+### Avast Web Guard Blocks Local Terraform Commands - August 2026
+**Problem**: On machines running Avast Premium Security, `terraform plan`/`apply`/`destroy` fail with `Failed to load plugin schemas` / `x509: certificate signed by unknown authority`. Avast's Web Guard intercepts TLS traffic - including the loopback connection Terraform core uses to talk to its own provider plugin subprocess - and its self-signed interception cert isn't trusted by that handshake.
+
+**Fix**: Turn off **Avast Premium Security → Web Guard** before running any `terraform` command, then turn it back on afterward. Exclusion lists (by process path or by `127.0.0.1`) were not sufficient to stop the interception - only fully disabling Web Guard worked.
+
+**Note**: This is separate from the AWS CLI's own cert issue, which is fixed durably via `aws configure set ca_bundle "C:\ProgramData\Avast Software\Avast\wscert.pem"` and does not require toggling Web Guard.
+
 ### Docker Build Cache (GHA) - March 2026
 **Problem**: `COPY package*.json ./` with Docker BuildKit GHA cache (`cache-from: type=gha`) fails to invalidate stale layers when new files are added that match the glob. This caused `npm ci` to fail because `package-lock.json` was not being copied into the container despite existing in the repo.
 
